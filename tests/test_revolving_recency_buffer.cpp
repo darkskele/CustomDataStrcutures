@@ -3,7 +3,7 @@
 #include <vector>
 #include <numeric>
 
-using namespace btc_stream::streamer::buffers;
+using namespace mcds;
 
 template <typename T, size_t N>
 using buffer_t = revolving_recency_buffer<T, N>;

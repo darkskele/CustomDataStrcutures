@@ -3,7 +3,7 @@
 #include <thread>
 #include "mcds/circular_buffer.hpp"
 
-using namespace btc_stream::streamer::buffers;
+using namespace mcds;
 
 TEST(CircularBuffer, BasicPushPop)
 {
