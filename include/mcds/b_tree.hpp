@@ -41,13 +41,13 @@ namespace mcds
         /**
          * @brief B tree node stored in an array.
          */
-        struct Node
+        struct alignas(64) Node
         {
-            alignas(64) std::array<Key, MAX_KEYS> keys_;              ///< Stored keys.
-            alignas(64) std::array<Value, MAX_KEYS> values_;          ///< Stored values.
-            alignas(64) std::array<uint32_t, MAX_CHILDREN> children_; ///< Child node indices.
-            uint16_t num_keys_;                                       ///< Number of valid keys.
-            bool is_leaf_;                                            ///< True if this node is a leaf.
+            std::array<Key, MAX_KEYS> keys_;              ///< Stored keys.
+            std::array<Value, MAX_KEYS> values_;          ///< Stored values.
+            std::array<uint32_t, MAX_CHILDREN> children_; ///< Child node indices.
+            uint16_t num_keys_;                           ///< Number of valid keys.
+            bool is_leaf_;                                ///< True if this node is a leaf.
 
             /// @brief Construct an empty leaf node.
             Node() : num_keys_(0), is_leaf_(true)
@@ -90,12 +90,12 @@ namespace mcds
         ~BTree() = default;
 
         /// @brief Copying a giant fixed pool tree is not ideal.
-        BTree(const BTree&) = delete;
-        BTree& operator=(const BTree&) = delete;
+        BTree(const BTree &) = delete;
+        BTree &operator=(const BTree &) = delete;
 
         /// @brief Allow moves.
-        BTree(BTree&&) noexcept = default;
-        BTree& operator=(BTree&&) noexcept = default;
+        BTree(BTree &&) noexcept = default;
+        BTree &operator=(BTree &&) noexcept = default;
 
         /**
          * @brief Find value associated with a given key.
@@ -103,10 +103,47 @@ namespace mcds
          * @param key Key to search for.
          * @return Pointer to value if found, otherwise nullptr.
          */
-        Value *find(const Key &key)
+        Value *find(const Key &key) noexcept
         {
             // Start search from root
-            return find_in_node(root_index_, key);
+            uint32_t node_idx = root_index_;
+
+            while (true)
+            {
+                Node &node = nodes_[node_idx];
+
+                // Binary search in node
+                int32_t left = 0;
+                int32_t right = static_cast<int32_t>(node.num_keys_) - 1;
+
+                while (left <= right)
+                {
+                    const int32_t mid = left + ((right - left) / 2);
+                    const Key &mid_key = node.keys_[mid];
+
+                    if (mid_key == key)
+                    {
+                        return &node.values_[mid];
+                    }
+                    else if (mid_key < key)
+                    {
+                        left = mid + 1;
+                    }
+                    else
+                    {
+                        right = mid - 1;
+                    }
+                }
+
+                // If leaf, not found
+                if (node.is_leaf_)
+                {
+                    return nullptr;
+                }
+
+                // Otherwise descend to child at index `left`
+                node_idx = node.children_[left];
+            }
         }
 
         /**
@@ -121,19 +158,7 @@ namespace mcds
          */
         bool insert(const Key &key, const Value &value)
         {
-            // Check if root is full
-            if (nodes_[root_index_].num_keys_ == MAX_KEYS)
-            {
-                // Split root
-                uint32_t new_root_idx = allocate_node();
-                Node &new_root = nodes_[new_root_idx];
-                new_root.is_leaf_ = false;
-                new_root.children_[0] = root_index_;
-                split_child(new_root_idx, 0);
-                root_index_ = new_root_idx;
-            }
-
-            return insert_non_full(root_index_, key, value);
+            return insert_internal(key, &value) != nullptr;
         }
 
         /**
@@ -165,7 +190,7 @@ namespace mcds
          *
          * @return Pointer to minimum value, or nullptr if the tree is empty.
          */
-        Value *find_min()
+        Value *find_min() noexcept
         {
             // Find minimum key
             if (nodes_[root_index_].num_keys_ == 0)
@@ -181,7 +206,7 @@ namespace mcds
          *
          * @return Pointer to minimum value, or nullptr if the tree is empty.
          */
-        const Value *find_min() const
+        const Value *find_min() const noexcept
         {
             // Reuse non const version via const_cast trick
             return const_cast<BTree *>(this)->find_min();
@@ -192,7 +217,7 @@ namespace mcds
          *
          * @return Pointer to maximum value, or nullptr if the tree is empty.
          */
-        Value *find_max()
+        Value *find_max() noexcept
         {
             // Find maximum key
             if (nodes_[root_index_].num_keys_ == 0)
@@ -208,7 +233,7 @@ namespace mcds
          *
          * @return Pointer to maximum value, or nullptr if the tree is empty.
          */
-        const Value *find_max() const
+        const Value *find_max() const noexcept
         {
             return const_cast<BTree *>(this)->find_max();
         }
@@ -266,7 +291,7 @@ namespace mcds
          *
          * @return Number of keys currently stored.
          */
-        size_t size() const
+        size_t size() const noexcept
         {
             return count_keys(root_index_);
         }
@@ -276,7 +301,7 @@ namespace mcds
          *
          * @return true if the tree has no keys, false otherwise.
          */
-        bool empty() const
+        bool empty() const noexcept
         {
             return nodes_[root_index_].num_keys_ == 0;
         }
@@ -292,57 +317,15 @@ namespace mcds
          */
         Value &operator[](const Key &key)
         {
-            Value *val = find(key);
-            if (val == nullptr)
+            if (Value *v = find(key))
             {
-                insert(key, Value{});
-                val = find(key);
+                return *v;
             }
-            return *val;
+
+            return *insert_internal(key, nullptr); // default insert, one walk
         }
 
     private:
-        /**
-         * @brief Recursive search for a key starting from a given node.
-         *
-         * @param node_idx Index of node to search in.
-         * @param key Key to search for.
-         * @return Pointer to value if found, otherwise nullptr.
-         */
-        Value *find_in_node(const uint32_t node_idx, const Key &key)
-        {
-            Node &node = nodes_[node_idx];
-
-            // Binary search in node
-            int32_t left = 0;
-            int32_t right = static_cast<int32_t>(node.num_keys_) - 1;
-            while (left <= right)
-            {
-                int32_t mid = left + (right - left) / 2;
-                if (node.keys_[mid] == key)
-                {
-                    return &node.values_[mid];
-                }
-                else if (node.keys_[mid] < key)
-                {
-                    left = mid + 1;
-                }
-                else
-                {
-                    right = mid - 1;
-                }
-            }
-
-            // If leaf, not found
-            if (node.is_leaf_)
-            {
-                return nullptr;
-            }
-
-            // Recurse to appropriate child
-            return find_in_node(node.children_[left], key);
-        }
-
         /**
          * @brief Allocate a new node from the free list or node pool.
          *
@@ -389,68 +372,101 @@ namespace mcds
         }
 
         /**
+         * @brief Internal insert helper, wrapped by public functions.
+         *
+         * Splits first if root is full before proceeding to insert.
+         *
+         * @param key Key to insert into.
+         * @param value Value to insert.
+         * @return Pointer to inserted value.
+         */
+        Value *insert_internal(const Key &key, const Value *value_if_new)
+        {
+            // Ensure root not full
+            if (nodes_[root_index_].num_keys_ == MAX_KEYS)
+            {
+                uint32_t new_root_idx = allocate_node();
+                Node &new_root = nodes_[new_root_idx];
+                new_root.is_leaf_ = false;
+                new_root.children_[0] = root_index_;
+                split_child(new_root_idx, 0);
+                root_index_ = new_root_idx;
+            }
+
+            return insert_non_full(root_index_, key, value_if_new);
+        }
+
+        /**
          * @brief Insert key/value into a node that is guaranteed not full.
          *
          * @param node_idx Index of node to insert into.
          * @param key Key to insert.
          * @param value Value to insert.
-         * @return true on success.
+         * @return Pointer to new value on success.
          */
-        bool insert_non_full(const uint32_t node_idx, const Key &key, const Value &value)
+        Value *insert_non_full(uint32_t node_idx, const Key &key, const Value *value_if_new)
         {
-            Node &node = nodes_[node_idx];
-            int32_t i = static_cast<int32_t>(node.num_keys_) - 1;
-
-            if (node.is_leaf_)
+            // Iterative search through tree, preferred over recursion
+            while (true)
             {
-                // Find insertion position and shift keys/values
+                Node &node = nodes_[node_idx];
+                int32_t i = static_cast<int32_t>(node.num_keys_) - 1;
+
+                if (node.is_leaf_)
+                {
+                    // Find insertion position and shift keys/values
+                    while (i >= 0 && key < node.keys_[i])
+                    {
+                        node.keys_[i + 1] = node.keys_[i];
+                        node.values_[i + 1] = node.values_[i];
+                        --i;
+                    }
+
+                    // Check for duplicates
+                    if (i >= 0 && node.keys_[i] == key)
+                    {
+                        // Only overwrite on insert(), not on operator[]
+                        if (value_if_new)
+                        {
+                            node.values_[i] = *value_if_new;
+                        }
+                        return &node.values_[i];
+                    }
+
+                    const int32_t insert_pos = i + 1;
+                    node.keys_[insert_pos] = key;
+                    if (value_if_new)
+                        node.values_[insert_pos] = *value_if_new;
+                    else
+                        node.values_[insert_pos] = Value{};
+
+                    ++node.num_keys_;
+                    return &node.values_[insert_pos];
+                }
+
+                // Internal node - find child
                 while (i >= 0 && key < node.keys_[i])
                 {
-                    node.keys_[i + 1] = node.keys_[i];
-                    node.values_[i + 1] = node.values_[i];
                     --i;
                 }
+                ++i;
 
-                // Check for duplicates
-                if (i >= 0 && node.keys_[i] == key)
+                uint32_t child_idx = node.children_[i];
+
+                // Split child if full
+                if (nodes_[child_idx].num_keys_ == MAX_KEYS)
                 {
-                    node.values_[i] = value;
-                    return true;
-                }
+                    split_child(node_idx, i);
 
-                node.keys_[i + 1] = key;
-                node.values_[i + 1] = value;
-                ++node.num_keys_;
-                return true;
-            }
-
-            // Internal node - find child
-            while (i >= 0 && key < node.keys_[i])
-            {
-                --i;
-            }
-            ++i;
-
-            uint32_t child_idx = node.children_[i];
-
-            // Split child if full
-            if (nodes_[child_idx].num_keys_ == MAX_KEYS)
-            {
-                split_child(node_idx, i);
-
-                // Determine which child to go to after split
-                if (key > nodes_[node_idx].keys_[i])
-                {
-                    ++i;
+                    if (key > nodes_[node_idx].keys_[i])
+                    {
+                        ++i;
+                    }
                     child_idx = nodes_[node_idx].children_[i];
                 }
-                else
-                {
-                    child_idx = nodes_[node_idx].children_[i];
-                }
-            }
 
-            return insert_non_full(child_idx, key, value);
+                node_idx = child_idx;
+            }
         }
 
         /**
@@ -519,60 +535,65 @@ namespace mcds
          */
         bool erase_from_node(uint32_t node_idx, const Key &key)
         {
-            Node &node = nodes_[node_idx];
-
-            // Binary search for key in this node
-            int32_t idx = find_key_index(node, key);
-
-            // Key found in this node
-            if (idx < static_cast<int32_t>(node.num_keys_) && node.keys_[idx] == key)
+            while (true)
             {
+                Node &node = nodes_[node_idx];
+
+                // Binary search for key in this node
+                int32_t idx = find_key_index(node, key);
+
+                // Key found in this node
+                if (idx < static_cast<int32_t>(node.num_keys_) && node.keys_[idx] == key)
+                {
+                    if (node.is_leaf_)
+                    {
+                        return erase_from_leaf(node_idx, idx);
+                    }
+                    else
+                    {
+                        return erase_from_internal(node_idx, idx);
+                    }
+                }
+
+                // Key not in this node
                 if (node.is_leaf_)
                 {
-                    return erase_from_leaf(node_idx, idx);
+                    return false; // Key doesn't exist in tree
                 }
-                else
+
+                // Key must be in subtree
+                // idx now points to the child that should contain the key
+                bool is_in_last_child = (idx == static_cast<int32_t>(node.num_keys_));
+
+                // If child has minimum keys, we need to ensure it won't underflow
+                if (nodes_[node.children_[idx]].num_keys_ == MIN_KEYS)
                 {
-                    return erase_from_internal(node_idx, idx);
+                    fill_child(node_idx, idx);
+
+                    // Reload node reference after fill_child
+                    Node &node_after_fill = nodes_[node_idx];
+
+                    // Re search for the correct child index since keys may have moved
+                    idx = find_key_index(node_after_fill, key);
+
+                    // After fill, the key might have moved to this node
+                    if (idx < static_cast<int32_t>(node_after_fill.num_keys_) && node_after_fill.keys_[idx] == key)
+                    {
+                        break;
+                    }
+
+                    // Determine which child to recurse into after fill
+                    if (is_in_last_child && idx > static_cast<int32_t>(node_after_fill.num_keys_))
+                    {
+                        idx = static_cast<int32_t>(node_after_fill.num_keys_);
+                    }
                 }
+
+                // Access children from nodes_ array directly, not stale reference
+                node_idx = nodes_[node_idx].children_[idx];
             }
 
-            // Key not in this node
-            if (node.is_leaf_)
-            {
-                return false; // Key doesn't exist in tree
-            }
-
-            // Key must be in subtree
-            // idx now points to the child that should contain the key
-            bool is_in_last_child = (idx == static_cast<int32_t>(node.num_keys_));
-
-            // If child has minimum keys, we need to ensure it won't underflow
-            if (nodes_[node.children_[idx]].num_keys_ == MIN_KEYS)
-            {
-                fill_child(node_idx, idx);
-
-                // Reload node reference after fill_child
-                Node &node_after_fill = nodes_[node_idx];
-
-                // Re search for the correct child index since keys may have moved
-                idx = find_key_index(node_after_fill, key);
-
-                // After fill, the key might have moved to this node
-                if (idx < static_cast<int32_t>(node_after_fill.num_keys_) && node_after_fill.keys_[idx] == key)
-                {
-                    return erase_from_node(node_idx, key);
-                }
-
-                // Determine which child to recurse into after fill
-                if (is_in_last_child && idx > static_cast<int32_t>(node_after_fill.num_keys_))
-                {
-                    idx = static_cast<int32_t>(node_after_fill.num_keys_);
-                }
-            }
-
-            // Access children from nodes_ array directly, not stale reference
-            return erase_from_node(nodes_[node_idx].children_[idx], key);
+            return false; // shouldn't happen
         }
 
         /**
@@ -582,15 +603,28 @@ namespace mcds
          * @param key Key to locate.
          * @return Index of first key >= key.
          */
-        int32_t find_key_index(const Node &node, const Key &key)
+        int32_t find_key_index(const Node &node, const Key &key) const noexcept
         {
             // Find index where key is or should be
-            int32_t idx = 0;
-            while (idx < static_cast<int32_t>(node.num_keys_) && node.keys_[idx] < key)
+            int32_t left = 0;
+            int32_t right = static_cast<int32_t>(node.num_keys_);
+
+            while (left < right)
             {
-                ++idx;
+                int32_t mid = left + ((right - left) / 2);
+
+                if (node.keys_[mid] < key)
+                {
+                    left = mid + 1; // key is to the right of mid
+                }
+                else
+                {
+                    right = mid; // mid might be the first >= key, keep it in range
+                }
             }
-            return idx;
+
+            // left == right, and is the first index where !(keys[idx] < key),
+            return left;
         }
 
         /**
@@ -890,17 +924,20 @@ namespace mcds
          */
         Value *find_min_in_subtree(uint32_t node_idx)
         {
-            // Find minimum value in subtree
-            Node &node = nodes_[node_idx];
-
-            // If leaf, first key is minimum
-            if (node.is_leaf_)
+            while (true)
             {
-                return (node.num_keys_ > 0) ? &node.values_[0] : nullptr;
-            }
+                // Find minimum value in subtree
+                Node &node = nodes_[node_idx];
 
-            // Otherwise, recurse to leftmost child
-            return find_min_in_subtree(node.children_[0]);
+                // If leaf, first key is minimum
+                if (node.is_leaf_)
+                {
+                    return (node.num_keys_ > 0) ? &node.values_[0] : nullptr;
+                }
+
+                // Otherwise retry on leftmost child
+                node_idx = node.children_[0];
+            }
         }
 
         /**
@@ -911,17 +948,20 @@ namespace mcds
          */
         Value *find_max_in_subtree(uint32_t node_idx)
         {
-            // Find maximum value in subtree
-            Node &node = nodes_[node_idx];
-
-            // If leaf, last key is maximum
-            if (node.is_leaf_)
+            while (true)
             {
-                return (node.num_keys_ > 0) ? &node.values_[node.num_keys_ - 1] : nullptr;
-            }
+                // Find maximum value in subtree
+                Node &node = nodes_[node_idx];
 
-            // Otherwise, recurse to rightmost child
-            return find_max_in_subtree(node.children_[node.num_keys_]);
+                // If leaf, last key is maximum
+                if (node.is_leaf_)
+                {
+                    return (node.num_keys_ > 0) ? &node.values_[node.num_keys_ - 1] : nullptr;
+                }
+
+                // Otherwise, try the rightmost child
+                node_idx = node.children_[node.num_keys_];
+            }
         }
 
         /**
