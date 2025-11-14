@@ -1,6 +1,5 @@
 set(MCDS_TEST_SOURCES
-    test_circular_buffer.cpp
-    test_revolving_recency_buffer.cpp
+    test_b_tree.cpp
 )
 
 add_executable(mcds_tests

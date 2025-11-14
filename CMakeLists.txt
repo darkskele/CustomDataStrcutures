@@ -10,16 +10,6 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    add_compile_options(
-        -Wall
-        -Wextra
-        -Wpedantic
-        -Wconversion
-        -Wsign-conversion
-    )
-endif()
-
 # Header-only library
 add_library(mcds INTERFACE)
 
@@ -37,7 +27,5 @@ find_package(GTest CONFIG REQUIRED)
 
 add_subdirectory(tests)
 
-# Google Benchmark via package config
-# find_package(benchmark CONFIG REQUIRED)
 
-# add_subdirectory(benchmarks)
+add_subdirectory(benchmarks)
