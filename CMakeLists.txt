@@ -9,6 +9,7 @@ project(mcds
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Header-only library
 add_library(mcds INTERFACE)
@@ -27,5 +28,7 @@ find_package(GTest CONFIG REQUIRED)
 
 add_subdirectory(tests)
 
+if (CMAKE_BUILD_TYPE STREQUAL "Release")
+    add_subdirectory(benchmarks)
+endif()
 
-add_subdirectory(benchmarks)

@@ -1,7 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
 
-set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
-
 include(FetchContent)
 
 # Fetch Google Benchmark
@@ -28,6 +26,3 @@ target_link_libraries(mcds_benchmarks
         benchmark::benchmark
         benchmark::benchmark_main
 )
-
-# Extra optimisation on top of Release
-target_compile_options(mcds_benchmarks PRIVATE -O3 -march=native)

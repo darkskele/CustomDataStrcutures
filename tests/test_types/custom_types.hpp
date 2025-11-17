@@ -5,7 +5,7 @@
 #include <atomic>
 #include <iostream>
 
-namespace mcds::tests::test_types
+namespace mcds::tests
 {
 
     // Global tracking for leak detection
@@ -211,4 +211,4 @@ namespace mcds::tests::test_types
         }
     };
 
-} // namespace mcds::tests::test_types
+} // namespace mcds::tests
