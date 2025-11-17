@@ -356,7 +356,10 @@ TYPED_TEST(CONTAINER_TEST_SUITE_NAME, StressTestLargeInsertion)
 
     for (int i = 0; i < count; ++i)
     {
-        this->container->insert(this->make_key(i), this->make_value(i));
+        if(!this->container->insert(this->make_key(i), this->make_value(i)))
+        {
+            EXPECT_TRUE(false) << "Failed to insert !";
+        }
     }
 
     EXPECT_EQ(this->container->size(), count);

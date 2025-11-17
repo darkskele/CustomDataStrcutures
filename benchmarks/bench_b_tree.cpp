@@ -165,8 +165,8 @@ namespace mcds::bench
 
         for (auto _ : state)
         {
-            auto *minv = tree.find_min();
-            auto *maxv = tree.find_max();
+            auto minv = tree.find_min();
+            auto maxv = tree.find_max();
             benchmark::DoNotOptimize(minv);
             benchmark::DoNotOptimize(maxv);
         }

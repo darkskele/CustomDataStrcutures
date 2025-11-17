@@ -36,6 +36,21 @@
             "miDebuggerPath": "gdb",
             "externalConsole": false,
             "preLaunchTask": "Build Release"
-        }
+        },
+        {
+            "name": "Debug Specific Test",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/tests/mcds_tests",
+            "args": [
+                "--gtest_filter=FlatMapTypedTest*.*"
+            ],
+            "cwd": "${workspaceFolder}",
+            "stopAtEntry": false,
+            "MIMode": "gdb",
+            "miDebuggerPath": "gdb",
+            "externalConsole": false,
+            "preLaunchTask": "Build Debug"
+        },
     ]
 }

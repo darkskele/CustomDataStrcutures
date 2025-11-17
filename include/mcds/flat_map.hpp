@@ -38,7 +38,6 @@ namespace mcds
             std::vector<T>>;
 
     public:
-
         /// @brief Public key and value types for testing and info.
         using key_type = Key;
         using value_type = Value;
@@ -71,8 +70,11 @@ namespace mcds
             // Find insertion point
             size_t i = find_index(key);
 
+            // Key exists if i < size_ AND keys match
+            bool key_exists = (i < size_ && keys_[i] == key);
+
             // Check if it doesn't exist
-            if (keys_[i] != key)
+            if (!key_exists)
             {
                 if (size_ >= CAPACITY)
                 {
