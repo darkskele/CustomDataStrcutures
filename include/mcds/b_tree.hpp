@@ -17,7 +17,7 @@ namespace mcds
      * @tparam MAX_NODES Maximum number of nodes in the tree.
      * @tparam STACK_NODE_BUDGET Maximum number of bytes to store on the stack, otherwise puts on heap.
      */
-    template <typename Key, typename Value, size_t Order = 16, size_t MAX_NODES = 15'000, size_t STACK_NODE_BUDGET = 2 * 1024 * 1024>
+    template <typename Key, typename Value, size_t Order = 16, size_t MAX_NODES = 15'000, size_t STACK_NODE_BUDGET = 1 * 1024 * 1024>
     class BTree
     {
         // Static assertions
@@ -76,6 +76,11 @@ namespace mcds
         uint32_t free_list_size_;                               ///< Free list size.
 
     public:
+
+        /// @brief Public key and value types for testing and info.
+        using key_type = Key;
+        using value_type = Value;
+
         /// @brief Construct an empty B tree with a single root node.
         BTree() : root_index_(0), next_free_node_(1), free_list_size_(0)
         {
@@ -190,26 +195,15 @@ namespace mcds
          *
          * @return Pointer to minimum value, or nullptr if the tree is empty.
          */
-        Value *find_min() noexcept
+        std::pair<const Key *, Value *> find_min() noexcept
         {
             // Find minimum key
             if (nodes_[root_index_].num_keys_ == 0)
             {
-                return nullptr;
+                return {nullptr, nullptr};
             }
 
             return find_min_in_subtree(root_index_);
-        }
-
-        /**
-         * @brief Find the minimum value in the tree (const overload).
-         *
-         * @return Pointer to minimum value, or nullptr if the tree is empty.
-         */
-        const Value *find_min() const noexcept
-        {
-            // Reuse non const version via const_cast trick
-            return const_cast<BTree *>(this)->find_min();
         }
 
         /**
@@ -217,73 +211,39 @@ namespace mcds
          *
          * @return Pointer to maximum value, or nullptr if the tree is empty.
          */
-        Value *find_max() noexcept
+        std::pair<const Key *, Value *> find_max() noexcept
         {
             // Find maximum key
             if (nodes_[root_index_].num_keys_ == 0)
             {
-                return nullptr;
+                return {nullptr, nullptr};
             }
 
             return find_max_in_subtree(root_index_);
         }
 
         /**
-         * @brief Find the maximum value in the tree (const overload).
-         *
-         * @return Pointer to maximum value, or nullptr if the tree is empty.
-         */
-        const Value *find_max() const noexcept
-        {
-            return const_cast<BTree *>(this)->find_max();
-        }
-
-        /**
          * @brief Find first value whose key is not less than @p search_key.
          *
          * @param search_key Lower bound key.
-         * @return Pointer to value with key >= search_key, or nullptr if none.
+         * @return Pointer to the key >= search_key, or nullptr if none.
          */
-        Value *lower_bound(const Key &search_key)
+        const Key *lower_bound(const Key &search_key)
         {
             // Find first key >= search_key
             return lower_bound_in_subtree(root_index_, search_key);
         }
 
         /**
-         * @brief Find first value whose key is not less than @p search_key (const overload).
-         *
-         * @param search_key Lower bound key.
-         * @return Pointer to value with key >= search_key, or nullptr if none.
-         */
-        const Value *lower_bound(const Key &search_key) const
-        {
-            // Find first key >= search_key
-            return const_cast<BTree *>(this)->lower_bound(search_key);
-        }
-
-        /**
          * @brief Find first value whose key is greater than @p search_key.
          *
          * @param search_key Upper bound key.
-         * @return Pointer to value with key > search_key, or nullptr if none.
+         * @return Pointer to the key > search_key, or nullptr if none.
          */
-        Value *upper_bound(const Key &search_key)
+        const Key *upper_bound(const Key &search_key)
         {
             // Find first key > search_key
             return upper_bound_in_subtree(root_index_, search_key);
-        }
-
-        /**
-         * @brief Find first value whose key is greater than @p search_key (const overload).
-         *
-         * @param search_key Upper bound key.
-         * @return Pointer to value with key > search_key, or nullptr if none.
-         */
-        const Value *upper_bound(const Key &search_key) const
-        {
-            // Find first key > search_key
-            return const_cast<BTree *>(this)->upper_bound(search_key);
         }
 
         /**
@@ -922,7 +882,7 @@ namespace mcds
          * @param node_idx Root of subtree.
          * @return Pointer to minimum value, or nullptr if subtree is empty.
          */
-        Value *find_min_in_subtree(uint32_t node_idx)
+        std::pair<const Key *, Value *> find_min_in_subtree(uint32_t node_idx)
         {
             while (true)
             {
@@ -932,7 +892,7 @@ namespace mcds
                 // If leaf, first key is minimum
                 if (node.is_leaf_)
                 {
-                    return (node.num_keys_ > 0) ? &node.values_[0] : nullptr;
+                    return (node.num_keys_ > 0) ? std::make_pair(&node.keys_[0], &node.values_[0]) : std::make_pair(nullptr, nullptr);
                 }
 
                 // Otherwise retry on leftmost child
@@ -946,7 +906,7 @@ namespace mcds
          * @param node_idx Root of subtree.
          * @return Pointer to maximum value, or nullptr if subtree is empty.
          */
-        Value *find_max_in_subtree(uint32_t node_idx)
+        std::pair<const Key *, Value *> find_max_in_subtree(uint32_t node_idx)
         {
             while (true)
             {
@@ -956,7 +916,7 @@ namespace mcds
                 // If leaf, last key is maximum
                 if (node.is_leaf_)
                 {
-                    return (node.num_keys_ > 0) ? &node.values_[node.num_keys_ - 1] : nullptr;
+                    return (node.num_keys_ > 0) ? std::make_pair(&node.keys_[node.num_keys_ - 1], &node.values_[node.num_keys_ - 1]) : std::make_pair(nullptr, nullptr);
                 }
 
                 // Otherwise, try the rightmost child
@@ -969,9 +929,9 @@ namespace mcds
          *
          * @param node_idx    Root of subtree.
          * @param search_key  Lower-bound key.
-         * @return Pointer to value, or nullptr if none.
+         * @return Pointer to key, or nullptr if none.
          */
-        Value *lower_bound_in_subtree(uint32_t node_idx, const Key &search_key)
+        Key *lower_bound_in_subtree(uint32_t node_idx, const Key &search_key)
         {
             // Find first key >= search_key
             if (node_idx == INVALID_INDEX)
@@ -1007,14 +967,14 @@ namespace mcds
                 // Check if there's a smaller valid key in left child
                 if (!node.is_leaf_)
                 {
-                    Value *left_result = lower_bound_in_subtree(node.children_[result_idx], search_key);
+                    Key *left_result = lower_bound_in_subtree(node.children_[result_idx], search_key);
                     if (left_result != nullptr)
                     {
                         return left_result;
                     }
                 }
 
-                return &node.values_[result_idx];
+                return &node.keys_[result_idx];
             }
 
             // No key >= search_key in this node, check rightmost child
@@ -1031,9 +991,9 @@ namespace mcds
          *
          * @param node_idx Root of subtree.
          * @param search_key Upper-bound key.
-         * @return Pointer to value, or nullptr if none.
+         * @return Pointer to the upper bound key.
          */
-        Value *upper_bound_in_subtree(uint32_t node_idx, const Key &search_key)
+        Key *upper_bound_in_subtree(uint32_t node_idx, const Key &search_key)
         {
             // Find first key > search_key
             if (node_idx == INVALID_INDEX)
@@ -1069,14 +1029,14 @@ namespace mcds
                 // Check if there's a smaller valid key in left child
                 if (!node.is_leaf_)
                 {
-                    Value *left_result = upper_bound_in_subtree(node.children_[result_idx], search_key);
+                    Key *left_result = upper_bound_in_subtree(node.children_[result_idx], search_key);
                     if (left_result != nullptr)
                     {
                         return left_result;
                     }
                 }
 
-                return &node.values_[result_idx];
+                return &node.keys_[result_idx];
             }
 
             // No key > search_key in this node, check rightmost child
