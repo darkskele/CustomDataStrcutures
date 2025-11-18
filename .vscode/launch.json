@@ -2,7 +2,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Launch Debug Tests",
+            "name": "Debug Tests",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/tests/mcds_tests",
@@ -14,7 +14,7 @@
             "preLaunchTask": "Build Debug"
         },
         {
-            "name": "Launch Release Tests",
+            "name": "Release Tests",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/tests/mcds_tests",
@@ -24,6 +24,33 @@
             "miDebuggerPath": "gdb",
             "externalConsole": false,
             "preLaunchTask": "Build Release"
-        }
+        },
+        {
+            "name": "Benchmark",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/benchmarks/mcds_benchmarks",
+            "cwd": "${workspaceFolder}",
+            "stopAtEntry": false,
+            "MIMode": "gdb",
+            "miDebuggerPath": "gdb",
+            "externalConsole": false,
+            "preLaunchTask": "Build Release"
+        },
+        {
+            "name": "Debug Specific Test",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/tests/mcds_tests",
+            "args": [
+                "--gtest_filter=FlatMapTypedTest*.*"
+            ],
+            "cwd": "${workspaceFolder}",
+            "stopAtEntry": false,
+            "MIMode": "gdb",
+            "miDebuggerPath": "gdb",
+            "externalConsole": false,
+            "preLaunchTask": "Build Debug"
+        },
     ]
 }

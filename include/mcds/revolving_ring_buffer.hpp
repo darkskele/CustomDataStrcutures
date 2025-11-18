@@ -6,7 +6,7 @@
 #include <stdexcept>
 #include <cassert>
 
-namespace btc_stream::streamer::buffers
+namespace mcds
 {
 
     /**
@@ -306,4 +306,4 @@ namespace btc_stream::streamer::buffers
         size_t size_;              ///< Size of buffer.
     };
 
-} // namespace btc_stream::streamer::buffers
+} // namespace mcds

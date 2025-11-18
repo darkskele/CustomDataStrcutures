@@ -4,7 +4,7 @@
 #include <type_traits>
 #include <optional>
 
-namespace btc_stream::streamer::buffers
+namespace mcds
 {
 
     /**
@@ -136,4 +136,4 @@ namespace btc_stream::streamer::buffers
         alignas(64) std::atomic<size_t> tail_{0}; ///< Next read index (consumer-owned)
     };
 
-} // namespace btc_stream::streamer::buffers
+} // namespace mcds
