@@ -18,6 +18,8 @@ FetchContent_MakeAvailable(googlebenchmark)
 # Benchmark executable
 add_executable(mcds_benchmarks
     bench_b_tree.cpp
+    bench_flat_map.cpp
+    bench_main.cpp
 )
 
 target_link_libraries(mcds_benchmarks
