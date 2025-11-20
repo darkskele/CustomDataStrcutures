@@ -8,43 +8,9 @@
 #include <type_traits>
 #include <vector>
 
-namespace mcds::bench
-{
-    // Payload types
-    using SmallPayload = int;
-
-    struct MediumPayload
-    {
-        std::array<std::uint64_t, 8> data; // 64 bytes
-    };
-
-    struct LargePayload
-    {
-        std::array<std::uint64_t, 64> data; // 512 bytes
-    };
-
-    template <typename T>
-    inline T make_payload(std::uint64_t seed)
-    {
-        T v{};
-        if constexpr (std::is_same_v<T, SmallPayload>)
-        {
-            v = static_cast<int>(seed);
-        }
-        else
-        {
-            for (size_t i = 0; i < v.data.size(); ++i)
-            {
-                v.data[i] = seed + static_cast<std::uint64_t>(i);
-            }
-        }
-        return v;
-    }
-
-} // namespace mcds::bench
+#include "benchmark_suites/data_types.hpp"
 
 // Macro to define all benchmarks for a container
-// Usage: DEFINE_ASSOCIATIVE_CONTAINER_BENCHMARKS(ContainerName, ContainerTemplate)
 #define DEFINE_ASSOCIATIVE_CONTAINER_BENCHMARKS(NAME, CONTAINER_TEMPLATE)                    \
     namespace mcds::bench                                                                    \
     {                                                                                        \
