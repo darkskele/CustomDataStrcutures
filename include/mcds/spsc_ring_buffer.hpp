@@ -8,7 +8,7 @@ namespace mcds
 {
 
     /**
-     * @brief A lock-free, single-producer single-consumer (SPSC) circular buffer.
+     * @brief A lock-free, single-producer single-consumer (SPSC) ring buffer.
      *
      * @tparam T         Element type stored in the buffer.
      * @tparam Capacity  Maximum number of slots in the buffer. One slot
@@ -19,7 +19,7 @@ namespace mcds
      * correct ordering.
      */
     template <typename T, std::size_t Capacity>
-    class circular_buffer
+    class spsc_ring_buffer
     {
         static_assert(Capacity > 1, "Capacity must be greater than one!");
         /// Raw storage type for one element of type T
@@ -29,12 +29,12 @@ namespace mcds
         /**
          * @brief Construct an empty buffer.
          */
-        circular_buffer() = default;
+        spsc_ring_buffer() = default;
 
         /**
          * @brief Destroy the buffer, calling destructors on any elements still present.
          */
-        ~circular_buffer()
+        ~spsc_ring_buffer()
         {
             auto tail = tail_.load(std::memory_order_relaxed);
             auto head = head_.load(std::memory_order_acquire);
@@ -48,8 +48,8 @@ namespace mcds
         }
 
         // Non copyable, non movable for now
-        circular_buffer(const circular_buffer &) = delete;
-        circular_buffer &operator=(const circular_buffer &) = delete;
+        spsc_ring_buffer(const spsc_ring_buffer &) = delete;
+        spsc_ring_buffer &operator=(const spsc_ring_buffer &) = delete;
 
         /**
          * @brief Construct a new element in place at the head of the buffer.
