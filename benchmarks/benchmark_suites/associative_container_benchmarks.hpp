@@ -8,7 +8,7 @@
 #include <type_traits>
 #include <vector>
 
-#include "benchmark_suites/data_types.hpp"
+#include "data_types.hpp"
 
 // Macro to define all benchmarks for a container
 #define DEFINE_ASSOCIATIVE_CONTAINER_BENCHMARKS(NAME, CONTAINER_TEMPLATE)                    \
