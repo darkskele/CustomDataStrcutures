@@ -251,6 +251,34 @@ namespace mcds
         }
 
         /**
+         * @brief Remove the back (newest) element.
+         *
+         * If the buffer is empty, this is a no op.
+         */
+        void pop_back() noexcept(std::is_nothrow_destructible_v<Value>)
+        {
+            // Early return for empty buffer
+            if (empty())
+            {
+                return;
+            }
+
+            // Destroy if needed
+            if constexpr (!std::is_trivially_destructible_v<Value>)
+            {
+                // Calculate the actual back index
+                const size_t back_idx = wrap(tail_ == 0 ? CAPACITY - 1 : tail_ - 1);
+                Value *p = storage_.ptr(back_idx);
+                p->~Value();
+            }
+
+            // Move tail backward
+            decrement_tail();
+
+            --size_;
+        }
+
+        /**
          * @brief Random access by logical index.
          *
          * @param i Index relative to the front element.
@@ -398,6 +426,30 @@ namespace mcds
                 if (++tail_ == CAPACITY)
                 {
                     tail_ = 0;
+                }
+            }
+        }
+
+        /**
+         * @brief Move the tail index backward by one with wrapping.
+         */
+        void decrement_tail() noexcept
+        {
+            // Use AND for cheap modulo if power of 2 capacity
+            if constexpr (POW2)
+            {
+                tail_ = (tail_ - 1) & (CAPACITY - 1);
+            }
+            else
+            {
+                // Wrap tail_ when it reaches 0
+                if (tail_ == 0)
+                {
+                    tail_ = CAPACITY - 1;
+                }
+                else
+                {
+                    --tail_;
                 }
             }
         }

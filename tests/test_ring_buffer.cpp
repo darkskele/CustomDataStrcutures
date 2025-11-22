@@ -389,4 +389,85 @@ namespace mcds::tests
         EXPECT_FALSE(has_leaks());
     }
 
+    // Add these two tests to your existing ring_buffer test suite
+
+    TEST(RingBufferInt, PopBackBasicBehaviour)
+    {
+        ring_buffer<int, 4> buf;
+
+        buf.push(10);
+        buf.push(20);
+        buf.push(30);
+
+        EXPECT_EQ(buf.size(), 3u);
+        EXPECT_EQ(buf.front(), 10);
+        EXPECT_EQ(buf.back(), 30);
+
+        // Pop from back
+        buf.pop_back();
+        EXPECT_EQ(buf.size(), 2u);
+        EXPECT_EQ(buf.front(), 10);
+        EXPECT_EQ(buf.back(), 20);
+
+        // Pop from back again
+        buf.pop_back();
+        EXPECT_EQ(buf.size(), 1u);
+        EXPECT_EQ(buf.front(), 10);
+        EXPECT_EQ(buf.back(), 10);
+
+        // Pop last element
+        buf.pop_back();
+        EXPECT_TRUE(buf.empty());
+        EXPECT_EQ(buf.size(), 0u);
+
+        // Popping empty is a no-op
+        buf.pop_back();
+        EXPECT_TRUE(buf.empty());
+        EXPECT_EQ(buf.size(), 0u);
+    }
+
+    TEST(RingBufferTrackedType, PopBackNoLeaks)
+    {
+        reset_tracking();
+
+        {
+            ring_buffer<TrackedType, 4> buf;
+
+            buf.emplace(1);
+            buf.emplace(2);
+            buf.emplace(3);
+            buf.emplace(4);
+
+            EXPECT_EQ(buf.size(), 4u);
+            EXPECT_EQ(constructions.load(), 4);
+            EXPECT_EQ(destructions.load(), 0);
+
+            // Pop from back should destroy element 4
+            buf.pop_back();
+            EXPECT_EQ(buf.size(), 3u);
+            EXPECT_EQ(destructions.load(), 1);
+            EXPECT_EQ(buf.back().id, 3);
+
+            // Pop from back should destroy element 3
+            buf.pop_back();
+            EXPECT_EQ(buf.size(), 2u);
+            EXPECT_EQ(destructions.load(), 2);
+            EXPECT_EQ(buf.back().id, 2);
+
+            // Pop from front should destroy element 1
+            buf.pop_front();
+            EXPECT_EQ(buf.size(), 1u);
+            EXPECT_EQ(destructions.load(), 3);
+            EXPECT_EQ(buf.front().id, 2);
+            EXPECT_EQ(buf.back().id, 2);
+
+            // Clear remaining element
+            buf.clear();
+            EXPECT_EQ(destructions.load(), 4);
+        }
+
+        EXPECT_FALSE(has_leaks());
+        EXPECT_EQ(leaked_objects(), 0);
+    }
+
 } // namespace mcds::tests
