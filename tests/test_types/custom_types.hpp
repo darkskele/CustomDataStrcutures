@@ -20,6 +20,8 @@ namespace mcds::tests
 
     inline bool has_leaks()
     {
+        auto cons = constructions.load(std::memory_order_relaxed);
+        auto dess = destructions.load(std::memory_order_relaxed);
         return constructions.load(std::memory_order_relaxed) != destructions.load(std::memory_order_relaxed);
     }
 
