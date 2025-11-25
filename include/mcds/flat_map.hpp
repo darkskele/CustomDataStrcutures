@@ -5,19 +5,27 @@
 #include <vector>
 #include <stdexcept>
 
+#include "memory/slab.hpp"
+
 namespace mcds
 {
 
     template <typename Key, typename Value, size_t CAPACITY = 1024, bool FORCE_HEAP = false, size_t STACK_BUDGET = 2 * 1024 * 1024>
     class FlatMap
     {
+        /// @brief Unsigned integer type for slot indices within a slab.
+        using SlotIndexType = std::conditional_t<CAPACITY <= (1ULL << 8), uint8_t, std::conditional_t<CAPACITY <= (1ULL << 16), uint16_t, std::conditional_t<CAPACITY <= (1ULL << 32), uint32_t, uint64_t>>>;
+
         // Constants for type decision
         /// @brief Total value bytes.
         static constexpr size_t TOTAL_VAL_BYTES = sizeof(Value) * CAPACITY;
         /// @brief Total key bytes.
         static constexpr size_t TOTAL_KEY_BYTES = sizeof(Key) * CAPACITY;
+        /// @brief Total slot index bytes.
+        static constexpr size_t TOTAL_SLOT_INDEX_BYTES = sizeof(SlotIndexType) * CAPACITY;
+
         /// @brief Conditional value for stack vs. heap storage.
-        static constexpr bool USE_STACK = !FORCE_HEAP && ((TOTAL_VAL_BYTES + TOTAL_KEY_BYTES) <= STACK_BUDGET);
+        static constexpr bool USE_STACK = !FORCE_HEAP && ((TOTAL_KEY_BYTES + TOTAL_VAL_BYTES + TOTAL_SLOT_INDEX_BYTES) <= STACK_BUDGET);
 
         static_assert(CAPACITY > 0, "FlatMap capacity must be greater than zero");
 
@@ -38,17 +46,21 @@ namespace mcds
             std::array<T, CAPACITY>,
             std::vector<T>>;
 
+        /// @brief Slab type for storing values.
+        using SlabType = memory::slab<Value, CAPACITY, !USE_STACK>;
+
     public:
-        /// @brief Public key and value types for testing and info.
+        /// @brief Public key, value and slab index types for testing and info.
         using key_type = Key;
         using value_type = Value;
+        using slot_index_type = SlotIndexType;
 
         FlatMap() : size_(0)
         {
             if constexpr (!USE_STACK)
             {
                 keys_.resize(CAPACITY);
-                values_.resize(CAPACITY);
+                values_ptrs_.resize(CAPACITY);
             }
         }
 
@@ -59,7 +71,10 @@ namespace mcds
             // If not end of keys, return pointer to value
             if (i != size_ && keys_[i] == key)
             {
-                return &values_[i];
+                // Retrieve ptr then get from slab
+                const slot_index_type ptr = values_ptrs_[i];
+
+                return &values_[ptr];
             }
 
             // Else return nullptr
@@ -75,33 +90,33 @@ namespace mcds
             bool key_exists = (i < size_ && keys_[i] == key);
 
             // Check if it doesn't exist
-            if (!key_exists)
+            if (key_exists)
+            {
+                const slot_index_type ptr = values_ptrs_[i];
+
+                // Overwrite data
+                values_[ptr] = std::move(value);
+            }
+            else
             {
                 if (size_ >= CAPACITY)
                 {
                     // Overflow
-                    if constexpr (!USE_STACK)
-                    {
-                        // Don't throw as can be resized in heap version
-                        return false;
-                    }
-                    else
-                    {
-                        throw std::runtime_error("Stack overflow in flat map!");
-                    }
+                    throw std::runtime_error("Stack overflow in flat map!");
                 }
 
                 // Shift elements right
                 std::move_backward(keys_.begin() + i, keys_.begin() + size_, keys_.begin() + size_ + 1);
-                std::move_backward(values_.begin() + i, values_.begin() + size_, values_.begin() + size_ + 1);
+                std::move_backward(values_ptrs_.begin() + i, values_ptrs_.begin() + size_, values_ptrs_.begin() + size_ + 1);
 
                 // Insert key
                 keys_[i] = std::move(key);
                 ++size_;
-            }
 
-            // Insert/overwrite value
-            values_[i] = std::move(value);
+                // Insert data into slab
+                const slot_index_type ptr = values_.allocate(std::move(value));
+                values_ptrs_[i] = ptr;
+            }
 
             return true;
         }
@@ -117,9 +132,13 @@ namespace mcds
                 return false;
             }
 
+            // Deallocate
+            const slot_index_type ptr = values_ptrs_[i];
+            values_.deallocate(ptr);
+
             // Shift left to remove
             std::move(keys_.begin() + i + 1, keys_.begin() + size_, keys_.begin() + i); // from one post i, shifted to i, therfore overwriting i
-            std::move(values_.begin() + i + 1, values_.begin() + size_, values_.begin() + i);
+            std::move(values_ptrs_.begin() + i + 1, values_ptrs_.begin() + size_, values_ptrs_.begin() + i);
             --size_;
 
             return true;
@@ -130,7 +149,7 @@ namespace mcds
             if (size_ == 0)
                 return {nullptr, nullptr};
             // Sorted array, smallest is first
-            return {&keys_[0], &values_[0]};
+            return {&keys_[0], &values_[values_ptrs_[0]]};
         }
 
         std::pair<const Key *, Value *> find_max() noexcept
@@ -138,7 +157,7 @@ namespace mcds
             if (size_ == 0)
                 return {nullptr, nullptr};
             // Sorted array, largest is last
-            return {&keys_[size_ - 1], &values_[size_ - 1]};
+            return {&keys_[size_ - 1], &values_[values_ptrs_[size_ - 1]]};
         }
 
         const Key *lower_bound(const Key &key) const noexcept
@@ -176,7 +195,7 @@ namespace mcds
             size_t i = find_index(key);
 
             // Check if it doesn't exist
-            if (keys_[i] != key)
+            if (i >= size_ || keys_[i] != key)
             {
                 if (size_ >= CAPACITY)
                 {
@@ -186,24 +205,19 @@ namespace mcds
 
                 // Shift elements right
                 std::move_backward(keys_.begin() + i, keys_.begin() + size_, keys_.begin() + size_ + 1);
-                std::move_backward(values_.begin() + i, values_.begin() + size_, values_.begin() + size_ + 1);
+                std::move_backward(values_ptrs_.begin() + i, values_ptrs_.begin() + size_, values_ptrs_.begin() + size_ + 1);
 
                 // Insert key
                 keys_[i] = std::move(key);
-                // Default construct
-                values_[i] = std::move(Value{});
+                // Allocate in slab
+                const slot_index_type ptr = values_.allocate(std::move(Value{}));
+                // Add ptr
+                values_ptrs_[i] = ptr;
                 ++size_;
             }
 
             // Return reference to value
-            return values_[i];
-        }
-
-        void resize(size_t new_size)
-            requires(!USE_STACK)
-        {
-            keys_.resize(new_size);
-            values_.resize(new_size);
+            return values_[values_ptrs_[i]];
         }
 
     private:
@@ -214,7 +228,8 @@ namespace mcds
         }
 
         StorageType<Key> keys_;
-        StorageType<Value> values_;
+        StorageType<slot_index_type> values_ptrs_;
+        SlabType values_;
         size_t size_;
     };
 
