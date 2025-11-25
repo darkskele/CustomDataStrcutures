@@ -14,43 +14,36 @@ namespace mcds::memory
 {
 
     /**
-     * @brief Fixed-capacity slab allocator for POD and non POD types.
+     * @brief Fixed capacity slab allocator for POD and non POD types.
      *
-     * The allocator does not perform double-free checks or lifetime  validation. It is intended for
-     * use inside higher-level memory pools that guarantee correctness.
-     *
-     * @note Size grows exponentially for the index type. Exercise caution for when providing @t IndexType.
+     * The allocator does not perform double free checks or lifetime  validation. It is intended for
+     * use inside higher- level memory pools that guarantee correctness.
      *
      * @tparam ValueType   The stored object type.
-     * @tparam IndexType   Unsigned integral index type (defines capacity).
+     * @tparam CAPACITY    Explicit capacity of slab.
      * @tparam FORCE_HEAP  If true, always allocates storage on heap.
      * @tparam STACK_BUDGET Maximum bytes allowed for stack allocation.
      */
-    template <typename ValueType, typename IndexType, bool FORCE_HEAP = false, size_t STACK_BUDGET = 64 * 1024>
-        requires std::is_unsigned_v<IndexType> && std::is_integral_v<IndexType>
-    class Slab
+    template <typename ValueType, size_t CAPACITY, bool FORCE_HEAP = false, size_t STACK_BUDGET = 64 * 1024>
+    class slab
     {
-        /// @brief Maximum number of values storable in this slab.
-        static constexpr size_t CAPACITY = static_cast<size_t>(std::numeric_limits<IndexType>::max()) + 1ULL;
-
         /// @brief Total byte size needed for all ValueType objects.
         static constexpr size_t STORAGE_SIZE = sizeof(ValueType) * CAPACITY;
 
         /// @brief Whether to store data on stack.
         static constexpr bool USE_STACK = !FORCE_HEAP && (STORAGE_SIZE <= STACK_BUDGET);
 
-        static_assert(CAPACITY > 0, "Capacity must be non-zero.");
+        static_assert(CAPACITY > 0, "Capacity must be non zero.");
 
         using StorageBuffer = detail::aligned_contiguous_storage<ValueType, CAPACITY, USE_STACK>;
 
     public:
         using value_type = ValueType;
-        using index_type = IndexType;
 
         /**
          * @brief Constructs an empty slab with all slots free.
          */
-        Slab() : storage_(), free_top_(CAPACITY), allocated_()
+        slab() : storage_(), free_top_(CAPACITY), allocated_()
         {
             for (size_t i = 0; i < CAPACITY; ++i)
             {
@@ -61,7 +54,7 @@ namespace mcds::memory
         /**
          * @brief Destroys all live objects.
          */
-        ~Slab()
+        ~slab()
         {
             if constexpr (!std::is_trivially_destructible_v<ValueType>)
             {
@@ -76,24 +69,24 @@ namespace mcds::memory
         }
 
         /// @brief All copy and move deleted to avoid nasty double frees. Memory ownership is explict and intransinet.
-        Slab(const Slab &) = delete;
-        Slab &operator=(const Slab &) = delete;
-        Slab(Slab &&) noexcept = delete;
-        Slab &operator=(Slab &&) noexcept = delete;
+        slab(const slab &) = delete;
+        slab &operator=(const slab &) = delete;
+        slab(slab &&) noexcept = delete;
+        slab &operator=(slab &&) noexcept = delete;
 
         /**
          * @brief Allocates space for a new object and constructs it in place.
          *
          * @tparam Args Constructor argument types.
          * @param args Arguments forwarded to ValueType constructor.
-         * @return IndexType  Index of the allocated slot.
+         * @return Index of the allocated slot.
          *
          * @note Undefined behaviour if slab is full.
          */
         template <typename... Args>
-        IndexType allocate(Args &&...args) noexcept(std::is_nothrow_constructible_v<ValueType, Args...>)
+        size_t allocate(Args &&...args) noexcept(std::is_nothrow_constructible_v<ValueType, Args...>)
         {
-            IndexType slot = allocate_slot();
+            size_t slot = allocate_slot();
             std::construct_at(storage_.ptr(slot), std::forward<Args>(args)...);
             return slot;
         }
@@ -105,7 +98,7 @@ namespace mcds::memory
          *
          * @note No double free protection. Caller must ensure correctness.
          */
-        void deallocate(const IndexType slot) noexcept
+        void deallocate(const size_t slot) noexcept
         {
             assert(slot < CAPACITY && "Out-of-bounds slot index!");
 
@@ -122,7 +115,7 @@ namespace mcds::memory
         /**
          * @brief Provides mutable access to an allocated object.
          */
-        ValueType &operator[](const IndexType slot) noexcept
+        ValueType &operator[](const size_t slot) noexcept
         {
             assert(slot < CAPACITY);
             return *storage_.ptr(slot);
@@ -131,7 +124,7 @@ namespace mcds::memory
         /**
          * @brief Provides read-only access to an allocated object.
          */
-        const ValueType &operator[](const IndexType slot) const noexcept
+        const ValueType &operator[](const size_t slot) const noexcept
         {
             assert(slot < CAPACITY);
             return *storage_.ptr(slot);
@@ -165,11 +158,11 @@ namespace mcds::memory
         /**
          * @brief Pops the next free slot from the free-stack.
          */
-        IndexType allocate_slot() noexcept
+        size_t allocate_slot() noexcept
         {
-            assert(free_top_ > 0 && "Slab exhausted!");
+            assert(free_top_ > 0 && "slab exhausted!");
 
-            const IndexType slot = free_list_[--free_top_];
+            const size_t slot = free_list_[--free_top_];
             if constexpr (!std::is_trivially_destructible_v<ValueType>)
             {
                 allocated_[slot] = true;

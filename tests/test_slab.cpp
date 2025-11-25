@@ -12,7 +12,7 @@ namespace mcds::tests
     // Basic Functionality Tests
     TEST(SlabTest, ConstructorInitializesFreelist)
     {
-        memory::Slab<int, uint8_t> slab;
+        memory::slab<int, 256> slab;
 
         EXPECT_EQ(slab.capacity(), 256);
         EXPECT_EQ(slab.size(), 0);
@@ -21,7 +21,7 @@ namespace mcds::tests
 
     TEST(SlabTest, AllocateSingleObject)
     {
-        memory::Slab<int, uint8_t> slab;
+        memory::slab<int, 256> slab;
 
         auto idx = slab.allocate(42);
 
@@ -31,7 +31,7 @@ namespace mcds::tests
 
     TEST(SlabTest, AllocateAndDeallocate)
     {
-        memory::Slab<int, uint8_t> slab;
+        memory::slab<int, 256> slab;
 
         auto idx = slab.allocate(100);
         EXPECT_EQ(slab.size(), 1);
@@ -43,7 +43,7 @@ namespace mcds::tests
 
     TEST(SlabTest, AllocateMultipleObjects)
     {
-        memory::Slab<int, uint8_t> slab;
+        memory::slab<int, 256> slab;
         std::vector<uint8_t> indices;
 
         for (int i = 0; i < 10; ++i)
@@ -63,7 +63,7 @@ namespace mcds::tests
 
     TEST(SlabTest, ReusesDeallocatedSlots)
     {
-        memory::Slab<int, uint8_t> slab;
+        memory::slab<int, 256> slab;
 
         // Allocate and deallocate
         auto idx1 = slab.allocate(100);
@@ -78,7 +78,7 @@ namespace mcds::tests
     // Capacity and Edge Cases
     TEST(SlabTest, FillEntireCapacity_uint8_t)
     {
-        memory::Slab<int, uint8_t> slab;
+        memory::slab<int, 256> slab;
         std::vector<uint8_t> indices;
 
         // Fill all 256 slots
@@ -100,7 +100,7 @@ namespace mcds::tests
 
     TEST(SlabTest, DeallocateAllAndRefill)
     {
-        memory::Slab<int, uint8_t> slab;
+        memory::slab<int, 256> slab;
         std::vector<uint8_t> indices;
 
         // Fill completely
@@ -138,7 +138,7 @@ namespace mcds::tests
 
     TEST(SlabTest, AlternatingAllocateAndDeallocate)
     {
-        memory::Slab<int, uint8_t> slab;
+        memory::slab<int, 256> slab;
 
         for (int i = 0; i < 100; ++i)
         {
@@ -153,7 +153,7 @@ namespace mcds::tests
 
     TEST(SlabTest, SparseAllocationPattern)
     {
-        memory::Slab<int, uint8_t> slab;
+        memory::slab<int, 256> slab;
         std::vector<uint8_t> kept_indices;
 
         // Allocate 100 objects
@@ -190,7 +190,7 @@ namespace mcds::tests
     // Different Index Types
     TEST(SlabTest, uint8_t_IndexType)
     {
-        memory::Slab<int, uint8_t> slab;
+        memory::slab<int, 256> slab;
         EXPECT_EQ(slab.capacity(), 256);
 
         auto idx = slab.allocate(42);
@@ -199,7 +199,7 @@ namespace mcds::tests
 
     TEST(SlabTest, uint16_t_IndexType)
     {
-        memory::Slab<int, uint16_t> slab;
+        memory::slab<int, 65536> slab;
         EXPECT_EQ(slab.capacity(), 65536);
 
         auto idx = slab.allocate(42);
@@ -209,7 +209,7 @@ namespace mcds::tests
     // Complex Types
     TEST(SlabTest, ComplexType_Construction)
     {
-        memory::Slab<ComplexType, uint8_t> slab;
+        memory::slab<ComplexType, 256> slab;
 
         auto idx = slab.allocate(100, 200, "test");
 
@@ -220,7 +220,7 @@ namespace mcds::tests
 
     TEST(SlabTest, ComplexType_MultipleObjects)
     {
-        memory::Slab<ComplexType, uint8_t> slab;
+        memory::slab<ComplexType, 256> slab;
         std::vector<uint8_t> indices;
 
         for (int i = 0; i < 10; ++i)
@@ -240,7 +240,7 @@ namespace mcds::tests
 
     TEST(SlabTest, ComplexType_Deallocation)
     {
-        memory::Slab<ComplexType, uint8_t> slab;
+        memory::slab<ComplexType, 256> slab;
 
         auto idx = slab.allocate(1, 2, "test_string_that_needs_cleanup");
         EXPECT_EQ(slab.size(), 1);
@@ -257,7 +257,7 @@ namespace mcds::tests
         reset_tracking();
 
         {
-            memory::Slab<TrackedType, uint8_t> slab;
+            memory::slab<TrackedType, 256> slab;
             auto idx = slab.allocate(42);
 
             EXPECT_EQ(slab[idx].id, 42);
@@ -277,7 +277,7 @@ namespace mcds::tests
         reset_tracking();
 
         {
-            memory::Slab<TrackedType, uint8_t> slab;
+            memory::slab<TrackedType, 256> slab;
             std::vector<uint8_t> indices;
 
             for (int i = 0; i < 50; ++i)
@@ -303,7 +303,7 @@ namespace mcds::tests
         reset_tracking();
 
         {
-            memory::Slab<TrackedType, uint8_t> slab;
+            memory::slab<TrackedType, 256> slab;
 
             // Allocate but don't deallocate - destructor should clean up
             for (int i = 0; i < 20; ++i)
@@ -327,7 +327,7 @@ namespace mcds::tests
         reset_tracking();
 
         {
-            memory::Slab<TrackedType, uint8_t> slab;
+            memory::slab<TrackedType, 256> slab;
             std::vector<uint8_t> indices;
 
             // Allocate 30 objects
@@ -357,7 +357,7 @@ namespace mcds::tests
     TEST(SlabTest, SmallType_UsesStackStorage)
     {
         // Small type, small capacity - should use stack
-        using SmallSlab = memory::Slab<int, uint8_t, false, 64 * 1024>;
+        using SmallSlab = memory::slab<int, 256, false, 64 * 1024>;
 
         SmallSlab slab;
         auto idx = slab.allocate(42);
@@ -369,7 +369,7 @@ namespace mcds::tests
     TEST(SlabTest, LargeType_UsesHeapStorage)
     {
         // Force heap storage
-        using HeapSlab = memory::Slab<ComplexType, uint8_t, true>;
+        using HeapSlab = memory::slab<ComplexType, 256, true>;
 
         HeapSlab slab;
         auto idx = slab.allocate(1, 2, "heap");
@@ -381,7 +381,7 @@ namespace mcds::tests
     // Perfect Forwarding Tests
     TEST(SlabTest, PerfectForwarding_RvalueString)
     {
-        memory::Slab<ComplexType, uint8_t> slab;
+        memory::slab<ComplexType, 256> slab;
 
         std::string temp = "temporary_string";
         auto idx = slab.allocate(1, 2, std::move(temp));
@@ -392,7 +392,7 @@ namespace mcds::tests
 
     TEST(SlabTest, PerfectForwarding_MultipleArgs)
     {
-        memory::Slab<ComplexType, uint8_t> slab;
+        memory::slab<ComplexType, 256> slab;
 
         int a = 10;
         int b = 20;
@@ -405,7 +405,7 @@ namespace mcds::tests
     // Const Correctness Tests
     TEST(SlabTest, ConstAccessor)
     {
-        memory::Slab<int, uint8_t> slab;
+        memory::slab<int, 256> slab;
         auto idx = slab.allocate(42);
 
         const auto &const_slab = slab;
@@ -414,7 +414,7 @@ namespace mcds::tests
 
     TEST(SlabTest, ConstMethods)
     {
-        memory::Slab<int, uint8_t> slab;
+        memory::slab<int, 256> slab;
         slab.allocate(1);
         slab.allocate(2);
 
@@ -428,7 +428,7 @@ namespace mcds::tests
     // Stress Tests
     TEST(SlabTest, StressTest_RandomAllocationsAndDeallocations)
     {
-        memory::Slab<int, uint8_t> slab;
+        memory::slab<int, 256> slab;
         std::vector<uint8_t> allocated_indices;
 
         // Perform 1000 random operations
@@ -463,7 +463,7 @@ namespace mcds::tests
 
     TEST(SlabTest, StressTest_FillAndEmptyMultipleTimes)
     {
-        memory::Slab<int, uint8_t> slab;
+        memory::slab<int, 256> slab;
 
         for (int iteration = 0; iteration < 10; ++iteration)
         {
@@ -498,7 +498,7 @@ namespace mcds::tests
     // Index Boundaries
     TEST(SlabTest, AllIndicesAreValid)
     {
-        memory::Slab<int, uint8_t> slab;
+        memory::slab<int, 256> slab;
         std::vector<uint8_t> indices;
 
         // Allocate all slots and collect indices

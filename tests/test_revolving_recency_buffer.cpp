@@ -447,7 +447,7 @@ TEST(RevolvingRecencyBufferTest, OverwriteConsistentAcrossApis)
     int x = 1;
     buf.push(x);    // push(const&)
     buf.push(2);    // push(rvalue)
-    buf.emplace(3); // emplace → overwrites 1
+    buf.emplace(3); // emplace, overwrites 1
 
     EXPECT_EQ(buf.size(), 2);
     EXPECT_EQ(buf.front(), 3); // newest

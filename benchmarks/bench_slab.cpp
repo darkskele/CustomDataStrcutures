@@ -11,10 +11,10 @@ namespace mcds::bench
 
     using namespace memory;
 
-    template <typename PayloadType, typename IndexType>
+    template <typename PayloadType, size_t CAPACITY>
     static void BM_Slab_Allocate_Single(benchmark::State &state)
     {
-        Slab<PayloadType, IndexType> slab;
+        slab<PayloadType, CAPACITY> slab;
         uint64_t seed = 0;
 
         for (auto _ : state)
@@ -30,12 +30,12 @@ namespace mcds::bench
         state.SetLabel(std::to_string(sizeof(PayloadType)) + "B");
     }
 
-    template <typename PayloadType, typename IndexType>
+    template <typename PayloadType, size_t CAPACITY>
     static void BM_Slab_AllocateOnly(benchmark::State &state)
     {
-        Slab<PayloadType, IndexType> slab;
+        slab<PayloadType, CAPACITY> slab;
         uint64_t seed = 0;
-        std::vector<IndexType> allocated_indices;
+        std::vector<size_t> allocated_indices;
         allocated_indices.reserve(slab.capacity());
 
         for (auto _ : state)
@@ -64,11 +64,11 @@ namespace mcds::bench
         state.SetLabel(std::to_string(sizeof(PayloadType)) + "B");
     }
 
-    template <typename PayloadType, typename IndexType>
+    template <typename PayloadType, size_t CAPACITY>
     static void BM_Slab_DeallocateOnly(benchmark::State &state)
     {
-        Slab<PayloadType, IndexType> slab;
-        std::vector<IndexType> indices;
+        slab<PayloadType, CAPACITY> slab;
+        std::vector<size_t> indices;
         indices.reserve(slab.capacity());
 
         for (auto _ : state)
@@ -95,10 +95,10 @@ namespace mcds::bench
         state.SetLabel(std::to_string(sizeof(PayloadType)) + "B");
     }
 
-    template <typename PayloadType, typename IndexType>
+    template <typename PayloadType, size_t CAPACITY>
     static void BM_Slab_RandomAccess(benchmark::State &state)
     {
-        Slab<PayloadType, IndexType> slab;
+        slab<PayloadType, CAPACITY> slab;
         const size_t num_objects = slab.capacity();
 
         std::vector<size_t> indices;
@@ -131,14 +131,14 @@ namespace mcds::bench
                        "B, objects=" + std::to_string(num_objects));
     }
 
-    template <typename PayloadType, typename IndexType>
+    template <typename PayloadType, size_t CAPACITY>
     static void BM_Slab_SequentialAllocation(benchmark::State &state)
     {
         for (auto _ : state)
         {
             // Setup
             state.PauseTiming();
-            Slab<PayloadType, IndexType> slab;
+            slab<PayloadType, CAPACITY> slab;
             state.ResumeTiming();
 
             // Fill slab sequentially
@@ -151,14 +151,14 @@ namespace mcds::bench
             benchmark::ClobberMemory();
         }
 
-        state.SetItemsProcessed(state.iterations() * static_cast<size_t>(std::numeric_limits<IndexType>::max()) + 1ULL);
+        state.SetItemsProcessed(state.iterations() * CAPACITY);
         state.SetLabel(std::to_string(sizeof(PayloadType)) + "B");
     }
 
-    template <typename PayloadType, typename IndexType>
+    template <typename PayloadType, size_t CAPACITY>
     static void BM_Slab_SequentialDeallocation(benchmark::State &state)
     {
-        Slab<PayloadType, IndexType> slab;
+        slab<PayloadType, CAPACITY> slab;
         std::vector<size_t> indices;
         indices.reserve(slab.capacity());
 
@@ -186,10 +186,10 @@ namespace mcds::bench
         state.SetLabel(std::to_string(sizeof(PayloadType)) + "B");
     }
 
-    template <typename PayloadType, typename IndexType>
+    template <typename PayloadType, size_t CAPACITY>
     static void BM_Slab_RandomDeallocation(benchmark::State &state)
     {
-        Slab<PayloadType, IndexType> slab;
+        slab<PayloadType, CAPACITY> slab;
         std::vector<size_t> indices;
         indices.reserve(slab.capacity());
 
@@ -221,11 +221,11 @@ namespace mcds::bench
         state.SetLabel(std::to_string(sizeof(PayloadType)) + "B");
     }
 
-    template <typename PayloadType, typename IndexType>
+    template <typename PayloadType, size_t CAPACITY>
     static void BM_Baseline_Vector_PushBack(benchmark::State &state)
     {
         uint64_t seed = 0;
-        size_t num_objects = static_cast<size_t>(std::numeric_limits<IndexType>::max()) + 1ULL;;
+        size_t num_objects = CAPACITY;
 
         for (auto _ : state)
         {
@@ -248,78 +248,102 @@ namespace mcds::bench
     }
 
     // Small Payload
-    BENCHMARK(BM_Slab_Allocate_Single<SmallPayload, uint8_t>);
-    BENCHMARK(BM_Slab_Allocate_Single<SmallPayload, uint16_t>);
+    BENCHMARK(BM_Slab_Allocate_Single<SmallPayload, 1'000>);
+    BENCHMARK(BM_Slab_Allocate_Single<SmallPayload, 10'000>);
+    BENCHMARK(BM_Slab_Allocate_Single<SmallPayload, 100'000>);
 
-    BENCHMARK(BM_Slab_AllocateOnly<SmallPayload, uint8_t>);
-    BENCHMARK(BM_Slab_AllocateOnly<SmallPayload, uint16_t>);
+    BENCHMARK(BM_Slab_AllocateOnly<SmallPayload, 1'000>);
+    BENCHMARK(BM_Slab_AllocateOnly<SmallPayload, 10'000>);
+    BENCHMARK(BM_Slab_AllocateOnly<SmallPayload, 100'000>);
 
-    BENCHMARK(BM_Slab_DeallocateOnly<SmallPayload, uint8_t>);
-    BENCHMARK(BM_Slab_DeallocateOnly<SmallPayload, uint16_t>);
+    BENCHMARK(BM_Slab_DeallocateOnly<SmallPayload, 1'000>);
+    BENCHMARK(BM_Slab_DeallocateOnly<SmallPayload, 10'000>);
+    BENCHMARK(BM_Slab_DeallocateOnly<SmallPayload, 100'000>);
 
-    BENCHMARK(BM_Slab_RandomAccess<SmallPayload, uint8_t>);
-    BENCHMARK(BM_Slab_RandomAccess<SmallPayload, uint16_t>);
+    BENCHMARK(BM_Slab_RandomAccess<SmallPayload, 1'000>);
+    BENCHMARK(BM_Slab_RandomAccess<SmallPayload, 10'000>);
+    BENCHMARK(BM_Slab_RandomAccess<SmallPayload, 100'000>);
 
-    BENCHMARK(BM_Slab_SequentialAllocation<SmallPayload, uint8_t>);
-    BENCHMARK(BM_Slab_SequentialAllocation<SmallPayload, uint16_t>);
+    BENCHMARK(BM_Slab_SequentialAllocation<SmallPayload, 1'000>);
+    BENCHMARK(BM_Slab_SequentialAllocation<SmallPayload, 10'000>);
+    BENCHMARK(BM_Slab_SequentialAllocation<SmallPayload, 100'000>);
 
-    BENCHMARK(BM_Slab_SequentialDeallocation<SmallPayload, uint8_t>);
-    BENCHMARK(BM_Slab_SequentialDeallocation<SmallPayload, uint16_t>);
+    BENCHMARK(BM_Slab_SequentialDeallocation<SmallPayload, 1'000>);
+    BENCHMARK(BM_Slab_SequentialDeallocation<SmallPayload, 10'000>);
+    BENCHMARK(BM_Slab_SequentialDeallocation<SmallPayload, 100'000>);
 
-    BENCHMARK(BM_Slab_RandomDeallocation<SmallPayload, uint8_t>);
-    BENCHMARK(BM_Slab_RandomDeallocation<SmallPayload, uint16_t>);
+    BENCHMARK(BM_Slab_RandomDeallocation<SmallPayload, 1'000>);
+    BENCHMARK(BM_Slab_RandomDeallocation<SmallPayload, 10'000>);
+    BENCHMARK(BM_Slab_RandomDeallocation<SmallPayload, 100'000>);
 
-    BENCHMARK(BM_Baseline_Vector_PushBack<SmallPayload, uint8_t>);
-    BENCHMARK(BM_Baseline_Vector_PushBack<SmallPayload, uint16_t>);
+    BENCHMARK(BM_Baseline_Vector_PushBack<SmallPayload, 1'000>);
+    BENCHMARK(BM_Baseline_Vector_PushBack<SmallPayload, 10'000>);
+    BENCHMARK(BM_Baseline_Vector_PushBack<SmallPayload, 100'000>);
 
     // Medium Payload
-    BENCHMARK(BM_Slab_Allocate_Single<MediumPayload, uint8_t>);
-    BENCHMARK(BM_Slab_Allocate_Single<MediumPayload, uint16_t>);
+    BENCHMARK(BM_Slab_Allocate_Single<MediumPayload, 1'000>);
+    BENCHMARK(BM_Slab_Allocate_Single<MediumPayload, 10'000>);
+    BENCHMARK(BM_Slab_Allocate_Single<MediumPayload, 100'000>);
 
-    BENCHMARK(BM_Slab_AllocateOnly<MediumPayload, uint8_t>);
-    BENCHMARK(BM_Slab_AllocateOnly<MediumPayload, uint16_t>);
+    BENCHMARK(BM_Slab_AllocateOnly<MediumPayload, 1'000>);
+    BENCHMARK(BM_Slab_AllocateOnly<MediumPayload, 10'000>);
+    BENCHMARK(BM_Slab_AllocateOnly<MediumPayload, 100'000>);
 
-    BENCHMARK(BM_Slab_DeallocateOnly<MediumPayload, uint8_t>);
-    BENCHMARK(BM_Slab_DeallocateOnly<MediumPayload, uint16_t>);
+    BENCHMARK(BM_Slab_DeallocateOnly<MediumPayload, 1'000>);
+    BENCHMARK(BM_Slab_DeallocateOnly<MediumPayload, 10'000>);
+    BENCHMARK(BM_Slab_DeallocateOnly<MediumPayload, 100'000>);
 
-    BENCHMARK(BM_Slab_RandomAccess<MediumPayload, uint8_t>);
-    BENCHMARK(BM_Slab_RandomAccess<MediumPayload, uint16_t>);
+    BENCHMARK(BM_Slab_RandomAccess<MediumPayload, 1'000>);
+    BENCHMARK(BM_Slab_RandomAccess<MediumPayload, 10'000>);
+    BENCHMARK(BM_Slab_RandomAccess<MediumPayload, 100'000>);
 
-    BENCHMARK(BM_Slab_SequentialAllocation<MediumPayload, uint8_t>);
-    BENCHMARK(BM_Slab_SequentialAllocation<MediumPayload, uint16_t>);
+    BENCHMARK(BM_Slab_SequentialAllocation<MediumPayload, 1'000>);
+    BENCHMARK(BM_Slab_SequentialAllocation<MediumPayload, 10'000>);
+    BENCHMARK(BM_Slab_SequentialAllocation<MediumPayload, 100'000>);
 
-    BENCHMARK(BM_Slab_SequentialDeallocation<MediumPayload, uint8_t>);
-    BENCHMARK(BM_Slab_SequentialDeallocation<MediumPayload, uint16_t>);
+    BENCHMARK(BM_Slab_SequentialDeallocation<MediumPayload, 1'000>);
+    BENCHMARK(BM_Slab_SequentialDeallocation<MediumPayload, 10'000>);
+    BENCHMARK(BM_Slab_SequentialDeallocation<MediumPayload, 100'000>);
 
-    BENCHMARK(BM_Slab_RandomDeallocation<MediumPayload, uint8_t>);
-    BENCHMARK(BM_Slab_RandomDeallocation<MediumPayload, uint16_t>);
+    BENCHMARK(BM_Slab_RandomDeallocation<MediumPayload, 1'000>);
+    BENCHMARK(BM_Slab_RandomDeallocation<MediumPayload, 10'000>);
+    BENCHMARK(BM_Slab_RandomDeallocation<MediumPayload, 100'000>);
 
-    BENCHMARK(BM_Baseline_Vector_PushBack<MediumPayload, uint8_t>);
-    BENCHMARK(BM_Baseline_Vector_PushBack<MediumPayload, uint16_t>);
+    BENCHMARK(BM_Baseline_Vector_PushBack<MediumPayload, 1'000>);
+    BENCHMARK(BM_Baseline_Vector_PushBack<MediumPayload, 10'000>);
+    BENCHMARK(BM_Baseline_Vector_PushBack<MediumPayload, 100'000>);
 
     // Large Payload
-    BENCHMARK(BM_Slab_Allocate_Single<LargePayload, uint8_t>);
-    BENCHMARK(BM_Slab_Allocate_Single<LargePayload, uint16_t>);
+    BENCHMARK(BM_Slab_Allocate_Single<LargePayload, 1'000>);
+    BENCHMARK(BM_Slab_Allocate_Single<LargePayload, 10'000>);
+    BENCHMARK(BM_Slab_Allocate_Single<LargePayload, 100'000>);
 
-    BENCHMARK(BM_Slab_AllocateOnly<LargePayload, uint8_t>);
-    BENCHMARK(BM_Slab_AllocateOnly<LargePayload, uint16_t>);
+    BENCHMARK(BM_Slab_AllocateOnly<LargePayload, 1'000>);
+    BENCHMARK(BM_Slab_AllocateOnly<LargePayload, 10'000>);
+    BENCHMARK(BM_Slab_AllocateOnly<LargePayload, 100'000>);
 
-    BENCHMARK(BM_Slab_DeallocateOnly<LargePayload, uint8_t>);
-    BENCHMARK(BM_Slab_DeallocateOnly<LargePayload, uint16_t>);
+    BENCHMARK(BM_Slab_DeallocateOnly<LargePayload, 1'000>);
+    BENCHMARK(BM_Slab_DeallocateOnly<LargePayload, 10'000>);
+    BENCHMARK(BM_Slab_DeallocateOnly<LargePayload, 100'000>);
 
-    BENCHMARK(BM_Slab_RandomAccess<LargePayload, uint8_t>);
-    BENCHMARK(BM_Slab_RandomAccess<LargePayload, uint16_t>);
+    BENCHMARK(BM_Slab_RandomAccess<LargePayload, 1'000>);
+    BENCHMARK(BM_Slab_RandomAccess<LargePayload, 10'000>);
+    BENCHMARK(BM_Slab_RandomAccess<LargePayload, 100'000>);
 
-    BENCHMARK(BM_Slab_SequentialAllocation<LargePayload, uint8_t>);
-    BENCHMARK(BM_Slab_SequentialAllocation<LargePayload, uint16_t>);
+    BENCHMARK(BM_Slab_SequentialAllocation<LargePayload, 1'000>);
+    BENCHMARK(BM_Slab_SequentialAllocation<LargePayload, 10'000>);
+    BENCHMARK(BM_Slab_SequentialAllocation<LargePayload, 100'000>);
 
-    BENCHMARK(BM_Slab_SequentialDeallocation<LargePayload, uint8_t>);
-    BENCHMARK(BM_Slab_SequentialDeallocation<LargePayload, uint16_t>);
+    BENCHMARK(BM_Slab_SequentialDeallocation<LargePayload, 1'000>);
+    BENCHMARK(BM_Slab_SequentialDeallocation<LargePayload, 10'000>);
+    BENCHMARK(BM_Slab_SequentialDeallocation<LargePayload, 100'000>);
 
-    BENCHMARK(BM_Slab_RandomDeallocation<LargePayload, uint8_t>);
-    BENCHMARK(BM_Slab_RandomDeallocation<LargePayload, uint16_t>);
+    BENCHMARK(BM_Slab_RandomDeallocation<LargePayload, 1'000>);
+    BENCHMARK(BM_Slab_RandomDeallocation<LargePayload, 10'000>);
+    BENCHMARK(BM_Slab_RandomDeallocation<LargePayload, 100'000>);
 
-    BENCHMARK(BM_Baseline_Vector_PushBack<LargePayload, uint8_t>);
-    BENCHMARK(BM_Baseline_Vector_PushBack<LargePayload, uint16_t>);
+    BENCHMARK(BM_Baseline_Vector_PushBack<LargePayload, 1'000>);
+    BENCHMARK(BM_Baseline_Vector_PushBack<LargePayload, 10'000>);
+    BENCHMARK(BM_Baseline_Vector_PushBack<LargePayload, 100'000>);
 
 } // namespace mcds::memory::bench
