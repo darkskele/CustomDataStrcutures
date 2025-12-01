@@ -122,7 +122,7 @@ namespace mcds
          * @param args Constructor arguments for the new element.
          */
         template <typename... Args>
-        void emplace(Args &&...args) noexcept(std::is_nothrow_constructible_v<Value, Args &&...>)
+        void emplace_back(Args &&...args) noexcept(std::is_nothrow_constructible_v<Value, Args &&...>)
         {
             const bool is_full = full();
 
@@ -157,9 +157,9 @@ namespace mcds
          *
          * @note Overwrites the front element if the buffer is full.
          */
-        void push(const Value &v)
+        void push_back(const Value &v)
         {
-            emplace(v);
+            emplace_back(v);
         }
 
         /**
@@ -169,13 +169,74 @@ namespace mcds
          *
          * @note Overwrites the front element if the buffer is full.
          */
-        void push(Value &&v)
+        void push_back(Value &&v)
         {
-            emplace(std::move(v));
+            emplace_back(std::move(v));
         }
 
         /**
-         * @brief Access the front (oldest) element (const).
+         * @brief Emplace-construct an element at the front of the buffer.
+         *
+         * If the buffer is full, the oldest element is destroyed (if needed) and overwritten by the new element.
+         *
+         * @tparam Args Argument types forwarded to @c Value 's constructor.
+         * @param args Constructor arguments for the new element.
+         */
+        template <typename... Args>
+        void emplace_front(Args &&...args) noexcept(std::is_nothrow_constructible_v<Value, Args &&...>)
+        {
+            const bool is_full = full();
+
+            // Overwrite on full
+            if (is_full)
+            {
+                // Move tail to new spot
+                decrement_tail();
+
+                // Resource managing value types must be destroyed
+                if constexpr (!std::is_trivially_destructible_v<Value>)
+                {
+                    // Destroy
+                    storage_.ptr(tail_)->~Value();
+                }
+            }
+
+            // Move head to write
+            decrement_head();
+
+            // Construct new element in place
+            new (storage_.ptr(head_)) Value(std::forward<Args>(args)...);
+
+            // If not full, we increment size
+            size_ += static_cast<size_t>(!is_full);
+        }
+
+        /**
+         * @brief Push a copy constructed element at the front of the buffer.
+         *
+         * @param v Value to copy into the buffer.
+         *
+         * @note Overwrites the front element if the buffer is full.
+         */
+        void push_front(const Value &v)
+        {
+            emplace_front(v);
+        }
+
+        /**
+         * @brief Push a move constructed element at the front of the buffer.
+         *
+         * @param v Value to move into the buffer.
+         *
+         * @note Overwrites the front element if the buffer is full.
+         */
+        void push_front(Value &&v)
+        {
+            emplace_front(std::move(v));
+        }
+
+        /**
+         * @brief Access the front element (const).
          *
          * @return Reference to the front element.
          *
@@ -187,7 +248,7 @@ namespace mcds
         }
 
         /**
-         * @brief Access the front (oldest) element.
+         * @brief Access the front element.
          *
          * @return Reference to the front element.
          *
@@ -199,7 +260,7 @@ namespace mcds
         }
 
         /**
-         * @brief Access the back (newest) element (const).
+         * @brief Access the back element (const).
          *
          * @return Reference to the back element.
          *
@@ -212,7 +273,7 @@ namespace mcds
         }
 
         /**
-         * @brief Access the back (newest) element.
+         * @brief Access the back element.
          *
          * @return Reference to the back element.
          *
@@ -225,7 +286,7 @@ namespace mcds
         }
 
         /**
-         * @brief Remove the front (oldest) element.
+         * @brief Remove the front element.
          *
          * If the buffer is empty, this is a no op.
          */
@@ -251,7 +312,7 @@ namespace mcds
         }
 
         /**
-         * @brief Remove the back (newest) element.
+         * @brief Remove the back element.
          *
          * If the buffer is empty, this is a no op.
          */
@@ -427,6 +488,24 @@ namespace mcds
                 {
                     tail_ = 0;
                 }
+            }
+        }
+
+        /**
+         * @brief Move the head index backward by one with wrapping.
+         */
+        void decrement_head() noexcept
+        {
+            if constexpr (POW2)
+            {
+                head_ = (head_ - 1) & (CAPACITY - 1);
+            }
+            else
+            {
+                if (head_ == 0)
+                    head_ = CAPACITY - 1;
+                else
+                    --head_;
             }
         }
 

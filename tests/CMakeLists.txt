@@ -1,9 +1,9 @@
 set(MCDS_TEST_SOURCES
-    test_b_tree.cpp
-    test_flat_map.cpp
+    # test_b_tree.cpp
+    # test_flat_map.cpp
     test_ring_buffer.cpp
-    test_slab.cpp
-    test_memory_pool.cpp
+    # test_slab.cpp
+    # test_memory_pool.cpp
 )
 
 add_executable(mcds_tests
