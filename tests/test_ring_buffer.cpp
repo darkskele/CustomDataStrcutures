@@ -2,472 +2,281 @@
 
 #include "mcds/ring_buffer.hpp"
 #include "test_types/custom_types.hpp"
+#include "test_suites/ring_buffer_typed_tests.hpp"
 
 namespace mcds::tests
 {
-    // Basic trivial type behaviour
-    TEST(RingBufferInt, InitiallyEmpty)
+    // Helper trait to expose capacity as a static member
+    template <typename T, size_t Cap, bool ForceHeap, size_t StackBudget>
+    struct ring_buffer_with_capacity : public ring_buffer<T, Cap, ForceHeap, StackBudget>
     {
-        ring_buffer<int, 4> buf;
+        using value_type = T;
+        static constexpr size_t capacity_value = Cap;
+    };
 
-        EXPECT_TRUE(buf.empty());
-        EXPECT_FALSE(buf.full());
-        EXPECT_EQ(buf.size(), 0u);
-        EXPECT_EQ(buf.capacity(), 4u);
-    }
-
-    TEST(RingBufferInt, PushAndPopWithoutWrap)
+    // Create RingBuffer-specific derived suite
+    template <typename RingBuffer>
+    class RingBufferTest : public RingBufferTypedTest<RingBuffer>
     {
-        ring_buffer<int, 4> buf;
+    protected:
+        using RingBufferType = RingBuffer;
+    };
 
-        buf.push(10);
-        buf.push(20);
+    // Define concrete ring buffer type combinations with various capacities
+    // Small capacity (power of 2)
+    using RingBufferInt4 = ring_buffer_with_capacity<int, 4, false, 1024 * 1024>;
+    using RingBufferDouble4 = ring_buffer_with_capacity<double, 4, false, 1024 * 1024>;
+    using RingBufferComplex4 = ring_buffer_with_capacity<ComplexType, 4, false, 1024 * 1024>;
+    using RingBufferTracked4 = ring_buffer_with_capacity<TrackedType, 4, false, 1024 * 1024>;
 
-        EXPECT_FALSE(buf.empty());
-        EXPECT_EQ(buf.size(), 2u);
-        EXPECT_EQ(buf.front(), 10);
-        EXPECT_EQ(buf.back(), 20);
+    // Medium capacity (non-power of 2)
+    using RingBufferInt15 = ring_buffer_with_capacity<int, 15, false, 1024 * 1024>;
+    using RingBufferDouble15 = ring_buffer_with_capacity<double, 15, false, 1024 * 1024>;
+    using RingBufferComplex15 = ring_buffer_with_capacity<ComplexType, 15, false, 1024 * 1024>;
+    using RingBufferTracked15 = ring_buffer_with_capacity<TrackedType, 15, false, 1024 * 1024>;
 
-        buf.pop_front();
-        EXPECT_EQ(buf.size(), 1u);
-        EXPECT_EQ(buf.front(), 20);
-        EXPECT_EQ(buf.back(), 20);
+    // Larger capacity (power of 2)
+    using RingBufferInt128 = ring_buffer_with_capacity<int, 128, false, 1024 * 1024>;
+    using RingBufferDouble128 = ring_buffer_with_capacity<double, 128, false, 1024 * 1024>;
+    using RingBufferComplex128 = ring_buffer_with_capacity<ComplexType, 128, false, 1024 * 1024>;
+    using RingBufferTracked128 = ring_buffer_with_capacity<TrackedType, 128, false, 1024 * 1024>;
 
-        buf.pop_front();
-        EXPECT_TRUE(buf.empty());
-        EXPECT_EQ(buf.size(), 0u);
+    // Edge case: capacity 1
+    using RingBufferInt1 = ring_buffer_with_capacity<int, 1, false, 1024 * 1024>;
+    using RingBufferTracked1 = ring_buffer_with_capacity<TrackedType, 1, false, 1024 * 1024>;
 
-        // Popping empty is a no op
-        buf.pop_front();
-        EXPECT_TRUE(buf.empty());
-        EXPECT_EQ(buf.size(), 0u);
-    }
+    // Heap allocation tests
+    using RingBufferIntHeap = ring_buffer_with_capacity<int, 1000, true, 1024 * 1024>;
+    using RingBufferComplexHeap = ring_buffer_with_capacity<ComplexType, 1000, true, 1024 * 1024>;
 
-    TEST(RingBufferInt, WrapAroundPowerOfTwoCapacity)
+    // Group all types together
+    using RingBufferTypes = ::testing::Types<
+        RingBufferInt4,
+        RingBufferDouble4,
+        RingBufferComplex4,
+        RingBufferTracked4,
+        RingBufferInt15,
+        RingBufferDouble15,
+        RingBufferComplex15,
+        RingBufferTracked15,
+        RingBufferInt128,
+        RingBufferDouble128,
+        RingBufferComplex128,
+        RingBufferTracked128,
+        RingBufferInt1,
+        RingBufferTracked1,
+        RingBufferIntHeap,
+        RingBufferComplexHeap>;
+
+    // Instantiate the test suite for all RingBuffer types
+    TYPED_TEST_SUITE(RingBufferTest, RingBufferTypes);
+
+    // Include the test suite
+#define RING_BUFFER_TEST_SUITE_NAME RingBufferTest
+#include "test_suites/ring_buffer_test_suite.hpp"
+#undef RING_BUFFER_TEST_SUITE_NAME
+
+    // Overwriting Behavior Tests - Only for ring buffers that overwrite on full
+
+    TYPED_TEST(RingBufferTest, PushBackOverwritesOldest)
     {
-        ring_buffer<int, 4> buf;
-
-        // Fill fully
-        buf.push(1);
-        buf.push(2);
-        buf.push(3);
-        buf.push(4);
-
-        ASSERT_TRUE(buf.full());
-        EXPECT_EQ(buf.size(), 4u);
-        EXPECT_EQ(buf.front(), 1);
-        EXPECT_EQ(buf.back(), 4);
-
-        // Move head forward
-        buf.pop_front(); // drop 1
-        buf.pop_front(); // drop 2
-
-        EXPECT_EQ(buf.size(), 2u);
-        EXPECT_EQ(buf.front(), 3);
-        EXPECT_EQ(buf.back(), 4);
-
-        // Force tail wrap
-        buf.push(5);
-        buf.push(6);
-
-        ASSERT_TRUE(buf.full());
-        EXPECT_EQ(buf.size(), 4u);
-
-        // Logical ordering must be FIFO
-        EXPECT_EQ(buf.front(), 3);
-        EXPECT_EQ(buf[0], 3);
-        EXPECT_EQ(buf[1], 4);
-        EXPECT_EQ(buf[2], 5);
-        EXPECT_EQ(buf[3], 6);
-        EXPECT_EQ(buf.back(), 6);
-    }
-
-    TEST(RingBufferInt, WrapAroundNonPowerOfTwoCapacity)
-    {
-        ring_buffer<int, 5> buf;
-
-        buf.push(10);
-        buf.push(20);
-        buf.push(30);
-        buf.push(40);
-        buf.push(50);
-
-        ASSERT_TRUE(buf.full());
-        EXPECT_EQ(buf.front(), 10);
-        EXPECT_EQ(buf.back(), 50);
-
-        buf.pop_front(); // drop 10
-        buf.pop_front(); // drop 20
-
-        EXPECT_EQ(buf.size(), 3u);
-        EXPECT_EQ(buf.front(), 30);
-
-        // Force modulo-based wrap
-        buf.push(60);
-        buf.push(70);
-
-        ASSERT_TRUE(buf.full());
-        EXPECT_EQ(buf.size(), 5u);
-
-        // Logical contents
-        EXPECT_EQ(buf.front(), 30);
-        EXPECT_EQ(buf[0], 30);
-        EXPECT_EQ(buf[1], 40);
-        EXPECT_EQ(buf[2], 50);
-        EXPECT_EQ(buf[3], 60);
-        EXPECT_EQ(buf[4], 70);
-        EXPECT_EQ(buf.back(), 70);
-    }
-
-    TEST(RingBufferInt, OverwriteOnFullDropsOldest)
-    {
-        ring_buffer<int, 3> buf;
-
-        buf.push(1);
-        buf.push(2);
-        buf.push(3);
-
-        ASSERT_TRUE(buf.full());
-        EXPECT_EQ(buf.size(), 3u);
-        EXPECT_EQ(buf.front(), 1);
-        EXPECT_EQ(buf.back(), 3);
-
-        // Overwrite 1
-        buf.push(4);
-        ASSERT_TRUE(buf.full());
-        EXPECT_EQ(buf.size(), 3u);
-
-        EXPECT_EQ(buf.front(), 2);
-        EXPECT_EQ(buf[0], 2);
-        EXPECT_EQ(buf[1], 3);
-        EXPECT_EQ(buf[2], 4);
-        EXPECT_EQ(buf.back(), 4);
-
-        // Overwrite 2
-        buf.push(5);
-        EXPECT_EQ(buf.front(), 3);
-        EXPECT_EQ(buf[0], 3);
-        EXPECT_EQ(buf[1], 4);
-        EXPECT_EQ(buf[2], 5);
-        EXPECT_EQ(buf.back(), 5);
-    }
-
-    TEST(RingBufferInt, ClearResetsStateAndIsReUsable)
-    {
-        ring_buffer<int, 4> buf;
-
-        buf.push(1);
-        buf.push(2);
-        buf.push(3);
-
-        EXPECT_FALSE(buf.empty());
-        EXPECT_EQ(buf.size(), 3u);
-
-        buf.clear();
-        EXPECT_TRUE(buf.empty());
-        EXPECT_EQ(buf.size(), 0u);
-        EXPECT_FALSE(buf.full());
-
-        // Reuse after clear
-        buf.push(42);
-        EXPECT_FALSE(buf.empty());
-        EXPECT_EQ(buf.size(), 1u);
-        EXPECT_EQ(buf.front(), 42);
-        EXPECT_EQ(buf.back(), 42);
-    }
-
-    TEST(RingBufferInt, IndexingAfterHeadMovementAndWrap)
-    {
-        ring_buffer<int, 4> buf;
-
-        buf.push(1);
-        buf.push(2);
-        buf.push(3);
-        buf.push(4);
-
-        buf.pop_front(); // drop 1
-        buf.pop_front(); // drop 2
-
-        // Now size=2
-        EXPECT_EQ(buf.front(), 3);
-        EXPECT_EQ(buf[0], 3);
-        EXPECT_EQ(buf[1], 4);
-
-        buf.push(5);
-        buf.push(6); // wrap
-
-        ASSERT_TRUE(buf.full());
-        // logical [3,4,5,6]
-        EXPECT_EQ(buf[0], 3);
-        EXPECT_EQ(buf[1], 4);
-        EXPECT_EQ(buf[2], 5);
-        EXPECT_EQ(buf[3], 6);
-    }
-
-    TEST(RingBufferInt, CapacityOneBehaviour)
-    {
-        ring_buffer<int, 1> buf;
-
-        EXPECT_TRUE(buf.empty());
-        EXPECT_EQ(buf.capacity(), 1u);
-
-        buf.push(10);
-        EXPECT_TRUE(buf.full());
-        EXPECT_EQ(buf.size(), 1u);
-        EXPECT_EQ(buf.front(), 10);
-        EXPECT_EQ(buf.back(), 10);
-
-        // Every push overwrites the single slot
-        buf.push(20);
-        EXPECT_TRUE(buf.full());
-        EXPECT_EQ(buf.size(), 1u);
-        EXPECT_EQ(buf.front(), 20);
-        EXPECT_EQ(buf.back(), 20);
-
-        buf.pop_front();
-        EXPECT_TRUE(buf.empty());
-    }
-
-    // ComplexType tests
-    TEST(RingBufferComplexType, PreservesOrderingAndContent)
-    {
-        ring_buffer<ComplexType, 4> buf;
-
-        buf.emplace(1, 10, "one");
-        buf.emplace(2, 20, "two");
-        buf.emplace(3, 30, "three");
-
-        EXPECT_EQ(buf.size(), 3u);
-        EXPECT_EQ(buf.front().primary_id, 1);
-        EXPECT_EQ(buf.front().secondary_id, 10);
-        EXPECT_EQ(buf.front().label, "one");
-        EXPECT_EQ(buf.back().primary_id, 3);
-        EXPECT_EQ(buf.back().label, "three");
-
-        // Overwrite case
-        buf.emplace(4, 40, "four");
-        buf.emplace(5, 50, "five"); // overwrites 1
-
-        EXPECT_EQ(buf.size(), 4u);
-        EXPECT_EQ(buf.front().primary_id, 2);
-        EXPECT_EQ(buf[0].label, "two");
-        EXPECT_EQ(buf[1].label, "three");
-        EXPECT_EQ(buf[2].label, "four");
-        EXPECT_EQ(buf[3].label, "five");
-        EXPECT_EQ(buf.back().primary_id, 5);
-    }
-
-    // TrackedType + leak detection
-    TEST(RingBufferTrackedType, NoLeaksOnPushPopAndClear)
-    {
-        reset_tracking();
-
+        if (this->Capacity <= 1)
         {
-            ring_buffer<TrackedType, 4> buf;
-            EXPECT_EQ(constructions.load(), 0);
+            GTEST_SKIP() << "Test requires capacity > 1";
+        }
+
+        // Fill to capacity
+        for (size_t i = 0; i < this->Capacity; ++i)
+        {
+            this->buffer->push_back(this->make_value(static_cast<int>(i)));
+        }
+
+        // Overwrite - should remove oldest (0)
+        this->buffer->push_back(this->make_value(100));
+
+        EXPECT_TRUE(this->buffer->full());
+        EXPECT_EQ(this->buffer->size(), this->Capacity);
+        EXPECT_TRUE(this->verify_value(this->buffer->front(), 1)); // 0 was overwritten
+        EXPECT_TRUE(this->verify_value(this->buffer->back(), 100));
+    }
+
+    TYPED_TEST(RingBufferTest, PushFrontOverwritesNewest)
+    {
+        if (this->Capacity <= 1)
+        {
+            GTEST_SKIP() << "Test requires capacity > 1";
+        }
+
+        // Fill to capacity with push_back
+        for (size_t i = 0; i < this->Capacity; ++i)
+        {
+            this->buffer->push_back(this->make_value(static_cast<int>(i)));
+        }
+
+        // Push front should overwrite newest (back)
+        this->buffer->push_front(this->make_value(100));
+
+        EXPECT_TRUE(this->buffer->full());
+        EXPECT_EQ(this->buffer->size(), this->Capacity);
+        EXPECT_TRUE(this->verify_value(this->buffer->front(), 100));
+        EXPECT_TRUE(this->verify_value(this->buffer->back(), static_cast<int>(this->Capacity - 2)));
+    }
+
+    TYPED_TEST(RingBufferTest, ManyOverwrites)
+    {
+        const int iterations = static_cast<int>(this->Capacity) * 2;
+
+        for (int i = 0; i < iterations; ++i)
+        {
+            this->buffer->push_back(this->make_value(i));
+        }
+
+        EXPECT_TRUE(this->buffer->full());
+        EXPECT_EQ(this->buffer->size(), this->Capacity);
+
+        // Should contain last Capacity elements
+        int start = iterations - static_cast<int>(this->Capacity);
+        for (size_t i = 0; i < this->Capacity; ++i)
+        {
+            EXPECT_TRUE(this->verify_value((*this->buffer)[i], start + static_cast<int>(i)));
+        }
+    }
+
+    TYPED_TEST(RingBufferTest, OverwritePreservesFifoOrder)
+    {
+        if (this->Capacity <= 1)
+        {
+            GTEST_SKIP() << "Test requires capacity > 1";
+        }
+
+        // Fill to capacity
+        for (size_t i = 0; i < this->Capacity; ++i)
+        {
+            this->buffer->push_back(this->make_value(static_cast<int>(i)));
+        }
+
+        // Overwrite several times
+        for (int i = 0; i < 3; ++i)
+        {
+            this->buffer->push_back(this->make_value(100 + i));
+        }
+
+        // Should still have FIFO ordering
+        EXPECT_EQ(this->buffer->size(), this->Capacity);
+
+        // First element should be (3) since 0-2 were overwritten
+        EXPECT_TRUE(this->verify_value(this->buffer->front(), 3));
+
+        // Last element should be 102
+        EXPECT_TRUE(this->verify_value(this->buffer->back(), 102));
+
+        // Verify all elements are in order
+        int expected_start = 3;
+        for (size_t i = 0; i < this->Capacity; ++i)
+        {
+            int expected_val = (i < this->Capacity - 3)
+                                   ? (expected_start + static_cast<int>(i))
+                                   : (100 + static_cast<int>(i) - (this->Capacity - 3));
+            EXPECT_TRUE(this->verify_value((*this->buffer)[i], expected_val));
+        }
+    }
+
+    TYPED_TEST(RingBufferTest, CapacityOneOverwrite)
+    {
+        if (this->Capacity == 1)
+        {
+            this->buffer->push_back(this->make_value(1));
+            EXPECT_TRUE(this->buffer->full());
+            EXPECT_EQ(this->buffer->size(), 1);
+
+            // Overwrite
+            this->buffer->push_back(this->make_value(2));
+            EXPECT_TRUE(this->buffer->full());
+            EXPECT_TRUE(this->verify_value(this->buffer->front(), 2));
+
+            // Overwrite again
+            this->buffer->push_front(this->make_value(3));
+            EXPECT_TRUE(this->buffer->full());
+            EXPECT_TRUE(this->verify_value(this->buffer->front(), 3));
+        }
+    }
+
+    TYPED_TEST(RingBufferTest, NoLeaksOnOverwrite)
+    {
+        if constexpr (std::is_same_v<typename TestFixture::ValueType, TrackedType>)
+        {
+            reset_tracking();
+
+            // Fill to capacity
+            for (size_t i = 0; i < this->Capacity; ++i)
+            {
+                this->buffer->push_back(this->make_value(static_cast<int>(i)));
+            }
+
+            EXPECT_EQ(constructions.load(), static_cast<int>(this->Capacity));
             EXPECT_EQ(destructions.load(), 0);
 
-            buf.emplace(1); // alloc resource
-            buf.emplace(2);
-            buf.emplace(3);
+            // Overwrite
+            this->buffer->push_back(this->make_value(100));
 
-            EXPECT_EQ(buf.size(), 3u);
-            EXPECT_EQ(constructions.load(), 3);
-            EXPECT_EQ(destructions.load(), 0);
+            EXPECT_EQ(constructions.load(), static_cast<int>(this->Capacity) + 1);
+            EXPECT_EQ(destructions.load(), 1); // One overwritten
 
-            // Pop one -> one resource should be destroyed
-            buf.pop_front();
-            EXPECT_EQ(buf.size(), 2u);
-            EXPECT_EQ(destructions.load(), 1);
-
-            // Clear should destroy the remaining two
-            buf.clear();
-            EXPECT_TRUE(buf.empty());
-            EXPECT_EQ(destructions.load(), 3);
+            this->buffer->clear();
             EXPECT_FALSE(has_leaks());
         }
-
-        // After buffer destruction there should still be no leaks
-        EXPECT_FALSE(has_leaks());
-        EXPECT_EQ(leaked_objects(), 0);
     }
 
-    TEST(RingBufferTrackedType, NoLeaksOnOverwriteWhenFull)
+    TYPED_TEST(RingBufferTest, MixedOverwritesWithPushFrontAndBack)
     {
-        reset_tracking();
-
+        // Fill to capacity
+        for (size_t i = 0; i < this->Capacity; ++i)
         {
-            ring_buffer<TrackedType, 3> buf;
-
-            buf.emplace(1);
-            buf.emplace(2);
-            buf.emplace(3);
-
-            EXPECT_EQ(buf.size(), 3u);
-            EXPECT_EQ(constructions.load(), 3);
-            EXPECT_EQ(destructions.load(), 0);
-
-            // Overwrite full buffer
-            buf.emplace(4);
-            EXPECT_EQ(buf.size(), 3u);
-            EXPECT_EQ(destructions.load(), 1);
-
-            buf.emplace(5);
-            EXPECT_EQ(destructions.load(), 2);
-
-            // Sanity check ordering
-            EXPECT_EQ(buf.front().id, 3); // 1,2 dropped
-            EXPECT_EQ(buf.back().id, 5);
+            this->buffer->push_back(this->make_value(static_cast<int>(i)));
         }
 
-        // All TrackedResource objects should be cleaned up
-        EXPECT_FALSE(has_leaks());
-        EXPECT_EQ(leaked_objects(), 0);
+        // Alternate overwrites from front and back
+        this->buffer->push_back(this->make_value(100));  // Overwrites 0
+        this->buffer->push_front(this->make_value(200)); // Overwrites Capacity-1
+        this->buffer->push_back(this->make_value(101));  // Overwrites 1
+        this->buffer->push_front(this->make_value(201)); // Overwrites Capacity-2
+
+        EXPECT_TRUE(this->buffer->full());
+        EXPECT_EQ(this->buffer->size(), this->Capacity);
+        EXPECT_TRUE(this->verify_value(this->buffer->front(), 201));
     }
 
-    TEST(RingBufferTrackedType, CopyAndMoveSemanticsWork)
+    TYPED_TEST(RingBufferTest, OverwriteCycleStressTest)
     {
-        reset_tracking();
-
-        ring_buffer<TrackedType, 4> buf;
-
-        TrackedType t1(1);
-        EXPECT_EQ(constructions.load(), 1); // resource for t1
-
-        // Push by const reference -> copy construct TrackedType + allocate new resource
-        buf.push(t1);
-        EXPECT_EQ(buf.size(), 1u);
-        EXPECT_EQ(constructions.load(), 2);
-        EXPECT_EQ(destructions.load(), 0);
-
-        int original_resource_value = t1.get_resource_value();
-        EXPECT_EQ(buf.front().get_resource_value(), original_resource_value);
-
-        // Push by rvalue -> move construct TrackedType into buffer (resource moved)
-        buf.push(TrackedType(2));
-        // One resource for temp + one move into buffer
-        EXPECT_EQ(constructions.load(), 3);
-        EXPECT_EQ(buf.size(), 2u);
-
-        // Ensure contents are as expected
-        EXPECT_EQ(buf[0].id, 1);
-        EXPECT_EQ(buf[1].id, 2);
-
-        // Clear and check all resources are freed
-        buf.clear();
-        EXPECT_TRUE(buf.empty());
-        EXPECT_EQ(destructions.load(), 2);
-    }
-
-    TEST(RingBufferTrackedType, FrontAndBackTrackFifoOrder)
-    {
-        reset_tracking();
-
-        ring_buffer<TrackedType, 4> buf;
-
-        buf.emplace(1);
-        buf.emplace(2);
-        buf.emplace(3);
-
-        EXPECT_EQ(buf.front().id, 1);
-        EXPECT_EQ(buf.back().id, 3);
-
-        buf.pop_front(); // drop id 1
-        EXPECT_EQ(buf.front().id, 2);
-        EXPECT_EQ(buf.back().id, 3);
-
-        buf.emplace(4);
-        EXPECT_EQ(buf.front().id, 2);
-        EXPECT_EQ(buf.back().id, 4);
-
-        // Overwrite full buffer and check
-        buf.emplace(5); // may overwrite depending on size
-        EXPECT_EQ(buf.back().id, 5);
-
-        // Just ensure we don't leak
-        buf.clear();
-        EXPECT_FALSE(has_leaks());
-    }
-
-    // Add these two tests to your existing ring_buffer test suite
-
-    TEST(RingBufferInt, PopBackBasicBehaviour)
-    {
-        ring_buffer<int, 4> buf;
-
-        buf.push(10);
-        buf.push(20);
-        buf.push(30);
-
-        EXPECT_EQ(buf.size(), 3u);
-        EXPECT_EQ(buf.front(), 10);
-        EXPECT_EQ(buf.back(), 30);
-
-        // Pop from back
-        buf.pop_back();
-        EXPECT_EQ(buf.size(), 2u);
-        EXPECT_EQ(buf.front(), 10);
-        EXPECT_EQ(buf.back(), 20);
-
-        // Pop from back again
-        buf.pop_back();
-        EXPECT_EQ(buf.size(), 1u);
-        EXPECT_EQ(buf.front(), 10);
-        EXPECT_EQ(buf.back(), 10);
-
-        // Pop last element
-        buf.pop_back();
-        EXPECT_TRUE(buf.empty());
-        EXPECT_EQ(buf.size(), 0u);
-
-        // Popping empty is a no-op
-        buf.pop_back();
-        EXPECT_TRUE(buf.empty());
-        EXPECT_EQ(buf.size(), 0u);
-    }
-
-    TEST(RingBufferTrackedType, PopBackNoLeaks)
-    {
-        reset_tracking();
-
+        // Stress test: Fill, overwrite, pop, repeat
+        for (int cycle = 0; cycle < 5; ++cycle)
         {
-            ring_buffer<TrackedType, 4> buf;
+            // Fill to capacity
+            for (size_t i = 0; i < this->Capacity; ++i)
+            {
+                this->buffer->push_back(this->make_value(static_cast<int>(cycle * 1000 + i)));
+            }
 
-            buf.emplace(1);
-            buf.emplace(2);
-            buf.emplace(3);
-            buf.emplace(4);
+            EXPECT_TRUE(this->buffer->full());
 
-            EXPECT_EQ(buf.size(), 4u);
-            EXPECT_EQ(constructions.load(), 4);
-            EXPECT_EQ(destructions.load(), 0);
+            // Overwrite half
+            for (size_t i = 0; i < this->Capacity / 2; ++i)
+            {
+                this->buffer->push_back(this->make_value(static_cast<int>(cycle * 1000 + 100 + i)));
+            }
 
-            // Pop from back should destroy element 4
-            buf.pop_back();
-            EXPECT_EQ(buf.size(), 3u);
-            EXPECT_EQ(destructions.load(), 1);
-            EXPECT_EQ(buf.back().id, 3);
+            EXPECT_TRUE(this->buffer->full());
 
-            // Pop from back should destroy element 3
-            buf.pop_back();
-            EXPECT_EQ(buf.size(), 2u);
-            EXPECT_EQ(destructions.load(), 2);
-            EXPECT_EQ(buf.back().id, 2);
-
-            // Pop from front should destroy element 1
-            buf.pop_front();
-            EXPECT_EQ(buf.size(), 1u);
-            EXPECT_EQ(destructions.load(), 3);
-            EXPECT_EQ(buf.front().id, 2);
-            EXPECT_EQ(buf.back().id, 2);
-
-            // Clear remaining element
-            buf.clear();
-            EXPECT_EQ(destructions.load(), 4);
+            // Pop half
+            for (size_t i = 0; i < this->Capacity / 2; ++i)
+            {
+                this->buffer->pop_front();
+            }
         }
 
-        EXPECT_FALSE(has_leaks());
-        EXPECT_EQ(leaked_objects(), 0);
+        // Should still be in valid state
+        EXPECT_LE(this->buffer->size(), this->Capacity);
+        EXPECT_GT(this->buffer->size(), 0u);
     }
 
 } // namespace mcds::tests
