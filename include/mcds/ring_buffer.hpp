@@ -77,15 +77,20 @@ namespace mcds
          * Transfers ownership of the underlying storage and indices from @p other to this instance.
          * The moved from buffer is left empty.
          */
-        ring_buffer(ring_buffer &&other) noexcept(std::is_nothrow_move_constructible_v<StorageBuffer>)
-            : storage_(std::move(other.storage_)),
-              head_(other.head_),
+        ring_buffer(ring_buffer &&other) noexcept(std::is_nothrow_move_constructible_v<Value>)
+            : head_(other.head_),
               tail_(other.tail_),
               size_(other.size_)
         {
-            other.head_ = 0;
-            other.tail_ = 0;
-            other.size_ = 0;
+            // In place move construct
+            for (size_t i = 0; i < size_; ++i)
+            {
+                size_t idx = wrap(head_ + i);
+                new (storage_.ptr(idx)) Value(std::move(*other.storage_.ptr(idx)));  // Calls Value's move constructor
+            }
+
+            // Clear other
+            other.clear();
         }
 
         /**
@@ -94,21 +99,26 @@ namespace mcds
          * Destroys the current contents, then transfers ownership of the underlying storage and indices from @p other.
          * The moved from buffer is left empty.
          */
-        ring_buffer &operator=(ring_buffer &&other) noexcept(std::is_nothrow_move_assignable_v<StorageBuffer>)
+        ring_buffer &operator=(ring_buffer &&other) noexcept(std::is_nothrow_move_assignable_v<Value>)
         {
             if (this != &other)
             {
                 // Destroy current elements before taking over new storage
                 clear();
 
-                storage_ = std::move(other.storage_);
                 head_ = other.head_;
                 tail_ = other.tail_;
                 size_ = other.size_;
 
-                other.head_ = 0;
-                other.tail_ = 0;
-                other.size_ = 0;
+                // In place move construct
+                for (size_t i = 0; i < size_; ++i)
+                {
+                    size_t idx = wrap(head_ + i);
+                    new (storage_.ptr(idx)) Value(std::move(*other.storage_.ptr(idx)));  // Calls Value's move constructor
+                }
+
+                // Clear other
+                other.clear();
             }
             return *this;
         }

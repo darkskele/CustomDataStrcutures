@@ -29,8 +29,7 @@ namespace mcds::tests
             // Check for leaks if using TrackedType
             if constexpr (std::is_same_v<ValueType, TrackedType>)
             {
-                EXPECT_FALSE(has_leaks())
-                    << "Memory leak detected: " << leaked_objects() << " objects";
+                EXPECT_FALSE(has_leaks()) << "Memory leak detected: " << leaked_objects() << " objects";
                 reset_tracking();
             }
         }
